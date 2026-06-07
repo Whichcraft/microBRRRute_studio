@@ -6,7 +6,7 @@ Proposed improvements, roughly ordered by value. Done items move to
 ## Audio engine
 - [ ] MIDI Input support: play on a physical MIDI keyboard to record steps (needs
       external libraries like `mido`).
-- [ ] **Sub-oscillator / Overtone** mix control for the synth.
+- [ ] Visual metronome: a simple flashing indicator for the beat.
 
 ## Editing & workflow
 - [ ] Drag-and-drop `.mbseq` files onto the window to open (requires external lib

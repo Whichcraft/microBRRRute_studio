@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.11.3] - 2026-06-07
+
+### Changed
+- Further refined the roadmap to focus strictly on sequencing and editing
+  capabilities, removing sound-design items that aren't supported by the
+  `.mbseq` file format.
+
 ## [0.11.2] - 2026-06-07
 
 ### Changed
