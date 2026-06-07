@@ -4,6 +4,17 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- Enforce the MicroBrute SE hardware limit of **64 steps per pattern bank**: the
+  editor refuses to grow a bank past 64 (with a status-bar notice) and the
+  parser rejects files/raw text that exceed it.
+
+### Fixed
+- Startup crash binding the non-ASCII `ö` PC key; unbindable keys are now
+  skipped instead of raising `TclError`.
+
 ## [0.4.0] - 2026-06-07
 
 ### Fixed

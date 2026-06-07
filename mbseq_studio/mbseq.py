@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 REST = None
+MAX_STEPS = 64  # MicroBrute SE hardware limit: 64 steps per pattern bank
 
 @dataclass
 class MbseqProject:
@@ -38,6 +39,8 @@ class MbseqProject:
                     if note < 0 or note > 127:
                         raise ValueError(f'Line {lineno}: MIDI note out of range: {note}')
                     steps.append(note)
+            if len(steps) > MAX_STEPS:
+                raise ValueError(f'Line {lineno}: bank {slot} has {len(steps)} steps; MicroBrute SE allows at most {MAX_STEPS}')
             seqs[slot] = steps
         if not seqs:
             return cls.empty()

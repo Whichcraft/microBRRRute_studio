@@ -7,6 +7,7 @@ from .mbseq import MbseqProject, midi_to_name, name_to_midi
 from .synth import play_note, get_last_audio_error, stop_all
 from .midi_export import export_midi
 
+MAX_STEPS = 64  # MicroBrute SE hardware limit: 64 steps per pattern bank
 WHITE_OFFSETS = [0,2,4,5,7,9,11,12,14,16,17,19,21,23,24]
 BLACK_OFFSETS = [1,3,6,8,10,13,15,18,20,22]
 BLACK_POS = {1:0.65, 3:1.65, 6:3.65, 8:4.65, 10:5.65, 13:7.65, 15:8.65, 18:10.65, 20:11.65, 22:12.65}
@@ -57,7 +58,7 @@ class MbseqStudio(tk.Tk):
             ttk.Radiobutton(top, text=str(bank), variable=self.slot, value=bank, command=self.change_slot).pack(side='left')
         ttk.Separator(top, orient='vertical').pack(side='left', fill='y', padx=10)
         ttk.Label(top, text='Cursor').pack(side='left')
-        ttk.Spinbox(top, from_=1, to=128, textvariable=self.cursor, width=5, command=self.refresh_grid).pack(side='left', padx=(4,14))
+        ttk.Spinbox(top, from_=1, to=MAX_STEPS, textvariable=self.cursor, width=5, command=self.refresh_grid).pack(side='left', padx=(4,14))
         ttk.Button(top, text='Open', command=self.open_file).pack(side='left')
         ttk.Button(top, text='Save', command=self.save_file).pack(side='left', padx=3)
         ttk.Button(top, text='Save As', command=self.save_as).pack(side='left')
@@ -152,6 +153,12 @@ class MbseqStudio(tk.Tk):
     def note_for_index(self, idx: int) -> int:
         return max(0, min(127, self.root_note + self.octave_shift.get() * 12 + idx))
 
+    def _at_step_limit(self) -> bool:
+        if len(self.steps()) >= MAX_STEPS:
+            self.status.config(text=f'Bank is full: MicroBrute SE allows at most {MAX_STEPS} steps per bank.')
+            return True
+        return False
+
     def refresh_all(self):
         self.refresh_grid(); self.refresh_keyboard(); self.refresh_raw(); self.refresh_status()
 
@@ -231,7 +238,9 @@ class MbseqStudio(tk.Tk):
         self.preview_note(note)
         steps = self.steps()
         idx = self.cursor.get()
-        if idx >= len(steps): steps.append(note)
+        if idx >= len(steps):
+            if self._at_step_limit(): return
+            steps.append(note)
         else: steps[idx] = note
         self.mark_dirty()
         self.move_cursor(1, refresh=False)
@@ -239,7 +248,9 @@ class MbseqStudio(tk.Tk):
 
     def insert_rest(self):
         steps = self.steps(); idx = self.cursor.get()
-        if idx >= len(steps): steps.append(None)
+        if idx >= len(steps):
+            if self._at_step_limit(): return
+            steps.append(None)
         else: steps[idx] = None
         self.mark_dirty()
         self.move_cursor(1, refresh=False)
@@ -261,6 +272,7 @@ class MbseqStudio(tk.Tk):
         self.cursor.set(0); self.refresh_all()
 
     def add_step(self):
+        if self._at_step_limit(): return
         steps = self.steps(); idx = self.cursor.get()+1
         steps.insert(idx, None); self.mark_dirty(); self.cursor.set(idx); self.refresh_grid(); self.refresh_raw()
 

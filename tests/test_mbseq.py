@@ -41,6 +41,17 @@ def test_parse_rejects_bad_note():
         raise AssertionError(f"expected ValueError for {bad!r}")
 
 
+def test_parse_rejects_over_64_steps():
+    ok = "1:" + " ".join(["60"] * 64) + "\n"
+    assert len(MbseqProject.parse(ok).sequences[1]) == 64
+    too_many = "1:" + " ".join(["60"] * 65) + "\n"
+    try:
+        MbseqProject.parse(too_many)
+    except ValueError:
+        return
+    raise AssertionError("expected ValueError for 65 steps")
+
+
 def test_note_name_roundtrip():
     for n in range(0, 128):
         assert name_to_midi(midi_to_name(n)) == n
