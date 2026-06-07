@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.11.4] - 2026-06-07
+
+### Changed
+- Expanded the roadmap in `TODO.md` with a new "Hardware verification" section
+  to track testing of arpeggiator patterns on the actual synth.
+
 ## [0.11.3] - 2026-06-07
 
 ### Changed
