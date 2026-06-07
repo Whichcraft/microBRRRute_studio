@@ -4,6 +4,9 @@ from pathlib import Path
 
 REST = None
 MAX_STEPS = 64  # MicroBrute SE hardware limit: 64 steps per pattern bank
+# Playable range: C0 (12) to C8 (108) covers the MicroBrute's range with full octave shifts.
+MIN_PLAYABLE = 12
+MAX_PLAYABLE = 108
 
 @dataclass
 class MbseqProject:

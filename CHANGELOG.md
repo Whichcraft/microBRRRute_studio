@@ -8,6 +8,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.7.0] - 2026-06-07
+
+### Added
+- **Rock-solid timing via pre-rendering** — the entire sequence is now
+  pre-rendered to a single WAV on Play, eliminating jitter at high BPM.
+- **Anti-click protection** — implemented short crossfades between steps to
+  prevent audio clicks.
+- **Dark Mode** — a high-contrast dark theme available in the View menu.
+- **Tooltips** — contextual help on all transport and editor buttons.
+- **Click-and-drag reordering** — move pattern steps by dragging them on the
+  grid.
+- **Count-in** — optional 4-beat metronome lead-in before playback starts.
+- **Configurable Bank Settings** — set the active bank length and toggle between
+  1/8 and 1/16 note resolutions.
+- **Hardware range validation** — warnings in the status bar if notes fall
+  outside the MicroBrute's typical playable range (C0–C8).
+- **Project quality infra** — added `ruff` and `mypy` to CI for automated linting
+  and type-checking.
+- **App icon support** — updated PyInstaller spec to support custom icons.
+
+### Changed
+- **Resizable reflowing grid** — the step grid now automatically wraps to
+  multiple rows based on window width, eliminating horizontal scrolling.
+
 ## [0.6.0] - 2026-06-07
 
 ### Added

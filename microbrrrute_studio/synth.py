@@ -65,6 +65,63 @@ def _osc_sample(phase: float, wave_shape: str) -> float:
     return 1.0 if phase < 0.5 else -1.0
 
 
+def render_steps_to_data(steps: list[int | None], bpm: int = 120,
+                        wave_shape: str = 'square', volume: float = 0.25, gate: float = 0.82,
+                        sample_rate: int = 44100, metronome: bool = False) -> bytes:
+    """Render a step list to raw PCM data bytes.
+    
+    Includes anti-click fades and optional metronome clicks.
+    """
+    step_secs = 60.0 / max(1, bpm) / 2
+    step_frames = max(1, int(step_secs * sample_rate))
+    note_frames = max(1, int(step_frames * gate))
+    amp = int(32767 * max(0.0, min(volume, 1.0)))
+    click_amp = int(32767 * 0.3)
+    attack = max(1, int(0.005 * sample_rate))  # 5ms attack
+    release = max(1, int(0.005 * sample_rate)) # 5ms release
+    
+    all_frames = bytearray()
+    for idx, note in enumerate(steps):
+        frames = [0.0] * step_frames
+        
+        # Add metronome click if enabled
+        if metronome:
+            is_beat = (idx % 2 == 0)
+            f = midi_freq(84 if is_beat else 72)
+            click_len = int(0.02 * sample_rate)
+            for i in range(min(click_len, step_frames)):
+                phase = (f * (i / sample_rate)) % 1.0
+                env = 1.0 - (i / click_len) # simple decay
+                frames[i] += math.sin(2 * math.pi * phase) * 0.4 * env
+
+        if note is not None:
+            freq = midi_freq(note)
+            for i in range(note_frames):
+                phase = (freq * (i / sample_rate)) % 1.0
+                val = _osc_sample(phase, wave_shape)
+                env = 1.0
+                if i < attack:
+                    env = i / attack
+                elif i > note_frames - release:
+                    env = (note_frames - i) / release
+                frames[i] += val * env
+
+        # Pack and clip
+        for f in frames:
+            v = max(-1.0, min(1.0, f))
+            all_frames += struct.pack('<h', int(v * amp if note is not None else v * click_amp))
+            
+    return bytes(all_frames)
+
+
+def render_pre_rendered_wav(path: Path, data: bytes, sample_rate: int = 44100):
+    with wave.open(str(path), 'wb') as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(sample_rate)
+        w.writeframes(data)
+
+
 def render_steps_wav(path: Path | str, steps: list[int | None], bpm: int = 120,
                      wave_shape: str = 'square', volume: float = 0.25, gate: float = 0.82,
                      sample_rate: int = 44100) -> None:
@@ -101,6 +158,25 @@ def render_steps_wav(path: Path | str, steps: list[int | None], bpm: int = 120,
                         env = min(env, (note_frames - i) / release)
                     frames += struct.pack('<h', int(_osc_sample(phase, wave_shape) * amp * env))
             w.writeframes(bytes(frames))
+
+
+def play_pre_rendered_wav(path: Path):
+    """Play a pre-rendered WAV file in a background thread."""
+    duration = 0
+    with wave.open(str(path), 'r') as w:
+        duration = w.getnframes() / w.getframerate()
+
+    def worker():
+        try:
+            if _IS_WINDOWS:
+                import winsound
+                winsound.PlaySound(str(path), winsound.SND_FILENAME | winsound.SND_ASYNC)
+                time.sleep(duration + 0.1)
+            else:
+                _play_unix(path, duration)
+        except Exception:
+            pass
+    threading.Thread(target=worker, daemon=True).start()
 
 
 def stop_all() -> None:

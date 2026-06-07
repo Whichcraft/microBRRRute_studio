@@ -1,3 +1,5 @@
 # Development / test dependencies (the app itself needs no third-party packages).
 -r requirements.txt
 pytest>=7.0
+ruff
+mypy
