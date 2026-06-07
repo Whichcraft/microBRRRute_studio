@@ -96,6 +96,9 @@ jobs:
     if: needs.version.outputs.released == 'false'
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
@@ -108,8 +111,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "Pruning existing releases..."
-          # Get list of all releases
-          RELEASES=$(gh release list --limit 1000 | cut -f 1)
+          # Read tag names from structured output instead of parsing table text.
+          RELEASES=$(gh release list --limit 1000 --json tagName --jq '.[].tagName')
           for tag in $RELEASES; do
             echo "Deleting release: $tag"
             gh release delete "$tag" --yes --cleanup-tag || echo "Failed to delete release/tag $tag (it might be gone already)"
