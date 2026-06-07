@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.7.9] - 2026-06-07
+
+### Changed
+- Final documentation sync: updated `README.md` to reflect the removal of the
+  "Play All" feature and the addition of the new 🎹 icon and automated release
+  pruning.
+
 ## [0.7.8] - 2026-06-07
 
 ### Fixed

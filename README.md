@@ -39,13 +39,15 @@ Every version bump merged to `main` is built and published automatically by CI.
 - **Visual Feedback.** Keys light up in real-time during playback.
 - **Built-in software synth** with selectable oscillator
   (square / saw / triangle / sine), volume control and octave shift.
-- **Rock-solid transport.**
+- **Reliable transport.**
   - **Rock-solid timing via pre-rendering** — entire sequences are pre-rendered
     to a single audio buffer on Play to eliminate jitter.
   - **■ Stop** (or `Esc`) stops the sound immediately.
   - **Loop**, **Metronome**, and **Count-in** toggles.
   - A green **playhead** highlights the sounding step.
+- **App Icon.** Official 🎹 icon visible in the title bar and taskbar.
 - **Powerful step editor.**
+
   - **Click-and-drag reordering** — move steps by dragging them on the grid.
   - **Configurable Bank Settings** — set the active bank length (1–64) and
     toggle between 1/8 and 1/16 note resolutions.
@@ -98,9 +100,10 @@ pyinstaller --noconfirm microBRRRute_Studio.spec   # output in dist/
 
 On Windows you can instead double-click `build_windows_exe.bat`.
 
-CI builds both the Windows and Linux executables automatically and publishes
+CI builds Windows, Linux, and macOS executables automatically and publishes
 them to the [Releases](https://github.com/Whichcraft/microBRRRute_studio/releases)
-page on every version bump merged to `main`.
+page on every version bump merged to `main`. To keep downloads simple, CI
+automatically prunes old versions to keep only the **latest** release active.
 
 ---
 
