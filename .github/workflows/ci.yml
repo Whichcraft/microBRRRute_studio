@@ -23,6 +23,6 @@ jobs:
       - name: Run headless tests
         run: python -m pytest -q
       - name: Lint with ruff
-        run: ruff check .
+        run: python -m ruff check .
       - name: Type-check with mypy
-        run: mypy . --ignore-missing-imports
+        run: python -m mypy . --ignore-missing-imports

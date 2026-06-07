@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.7.6] - 2026-06-07
+
+### Fixed
+- Fixed CI pipeline failure on Windows by calling `ruff` and `mypy` via
+  `python -m`.
+
 ## [0.7.5] - 2026-06-07
 
 ### Added
