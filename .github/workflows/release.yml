@@ -1,0 +1,98 @@
+name: Release
+
+# On merge to main: if microbrrrute_studio.__version__ names a version that has
+# no v<version> tag yet, build standalone executables and publish a GitHub
+# Release. Merges to main without a version bump are no-ops.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      tag: ${{ steps.v.outputs.tag }}
+      released: ${{ steps.v.outputs.released }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: v
+        shell: bash
+        run: |
+          VERSION=$(python3 -c "import re,pathlib; t=pathlib.Path('microbrrrute_studio/__init__.py').read_text(); print(re.search(r'__version__\s*=\s*[\x27\"]([^\x27\"]+)', t).group(1))")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          if git rev-parse "refs/tags/v$VERSION" >/dev/null 2>&1; then
+            echo "released=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::v$VERSION already released — skipping."
+          else
+            echo "released=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Will build and release v$VERSION."
+          fi
+
+  build:
+    needs: version
+    if: needs.version.outputs.released == 'false'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: microBRRRute_Studio-windows-x64.exe
+            built: dist/microBRRRute_Studio.exe
+          - os: ubuntu-latest
+            artifact: microBRRRute_Studio-linux-x64
+            built: dist/microBRRRute_Studio
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Tk runtime libs (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y python3-tk
+      - name: Verify Tkinter is importable
+        run: python -c "import tkinter; print('Tk', tkinter.TkVersion)"
+      - name: Install build dependencies
+        run: python -m pip install --upgrade pip pyinstaller
+      - name: Build executable
+        run: pyinstaller --noconfirm microBRRRute_Studio.spec
+      - name: Stage artifact
+        shell: bash
+        run: |
+          mkdir -p out
+          cp "${{ matrix.built }}" "out/${{ matrix.artifact }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: out/${{ matrix.artifact }}
+          if-no-files-found: error
+
+  release:
+    needs: [version, build]
+    if: needs.version.outputs.released == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: List artifacts
+        run: ls -R artifacts
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.version.outputs.tag }}
+          name: microBRRRute Studio ${{ needs.version.outputs.version }}
+          generate_release_notes: true
+          files: artifacts/*

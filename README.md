@@ -15,6 +15,17 @@ single-file **Windows `.exe`** with PyInstaller.
 
 ---
 
+## ⬇️ Download
+
+Prebuilt standalone executables for **Windows** and **Linux** are attached to
+each release — no Python install required:
+
+**[→ Latest release](https://github.com/Whichcraft/microBRRRute_studio/releases/latest)**
+
+Every version bump merged to `main` is built and published automatically by CI.
+
+---
+
 ## ✨ Features
 
 - **All 8 pattern banks**, always visible and preserved on load/save — switch
@@ -72,13 +83,21 @@ python3 main.py
 
 ---
 
-## 🛠️ Build a Windows EXE
+## 🛠️ Build a standalone executable
 
-```bat
-build_windows_exe.bat
+The bundled PyInstaller spec builds a single-file executable for whatever OS you
+run it on (`microBRRRute_Studio.exe` on Windows, `microBRRRute_Studio` on Linux):
+
+```bash
+pip install pyinstaller
+pyinstaller --noconfirm microBRRRute_Studio.spec   # output in dist/
 ```
 
-Produces a single-file executable at `dist\microBRRRute_Studio.exe`.
+On Windows you can instead double-click `build_windows_exe.bat`.
+
+CI builds both the Windows and Linux executables automatically and publishes
+them to the [Releases](https://github.com/Whichcraft/microBRRRute_studio/releases)
+page on every version bump merged to `main`.
 
 ---
 

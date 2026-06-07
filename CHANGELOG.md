@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [0.5.0] - 2026-06-07
+
 ### Added
 - **Undo / redo** (`Ctrl+Z` / `Ctrl+Y`, also in the new Edit menu) across all
   editing operations, with a 100-step history.
@@ -23,6 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `pyproject.toml` packaging (installable via `pip install -e .`, with a
   `microbrrrute-studio` entry point) and a **GitHub Actions CI** workflow running
   the headless tests on Linux/Windows/macOS across Python 3.10 and 3.12.
+- **CD release pipeline** — on merge to `main`, when `__version__` names a new
+  version, builds standalone Windows (`.exe`) and Linux executables with
+  PyInstaller and publishes them to a tagged GitHub Release.
+- **Single-source versioning** — `microbrrrute_studio.__version__` is the one
+  source of truth; `pyproject.toml` reads it dynamically. Project follows
+  Semantic Versioning.
 
 ### Changed
 - **Renamed the project to microBRRRute Studio.** The GitHub repo is now
