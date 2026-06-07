@@ -1,11 +1,12 @@
 name: Release
 
-# On merge to main: if microbrrrute_studio.__version__ names a version that has
-# no v<version> tag yet, build standalone executables and publish a GitHub
-# Release. Merges to main without a version bump are no-ops.
+# On merge to main or mbuild: if microbrrrute_studio.__version__ names a version
+# that has no v<version> tag yet, build standalone executables and publish a
+# GitHub Release. Merges without a version bump are no-ops.
 on:
   push:
-    branches: [main]
+    branches: [main, mbuild]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -51,6 +52,9 @@ jobs:
             built: dist/microBRRRute_Studio.exe
           - os: ubuntu-latest
             artifact: microBRRRute_Studio-linux-x64
+            built: dist/microBRRRute_Studio
+          - os: macos-latest
+            artifact: microBRRRute_Studio-macos-x64
             built: dist/microBRRRute_Studio
     runs-on: ${{ matrix.os }}
     steps:

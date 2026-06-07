@@ -26,11 +26,12 @@ dynamically — never hard-code the version elsewhere.
 Workflow for a change: edit code → bump `__version__` → move the CHANGELOG
 `[Unreleased]` items under a new `[x.y.z] - <date>` heading → commit on `dev`.
 
-**Release (CD):** merging `dev` → `main` triggers `.github/workflows/release.yml`.
-If `__version__` names a version with no existing `vX.Y.Z` tag, it builds the
-Windows `.exe` and Linux executable and publishes a GitHub Release tagged
-`vX.Y.Z`. So a release happens exactly when a version-bumped `dev` reaches
-`main`; merges without a bump are no-ops for releasing.
+**Release (CD):** merging `dev` (or `mbuild`) → `main` triggers
+`.github/workflows/release.yml`. If `__version__` names a version with no
+existing `vX.Y.Z` tag, it builds the Windows `.exe`, Linux, and macOS
+executables and publishes a GitHub Release tagged `vX.Y.Z`. So a release happens
+exactly when a version-bumped branch reaches `main` (or an `mbuild` branch);
+merges without a bump are no-ops for releasing.
 
 ## Notes
 

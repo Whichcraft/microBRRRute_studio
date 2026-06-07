@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.5.1] - 2026-06-07
+
+### Added
+- **macOS support in release pipeline** — builds and publishes macOS binaries
+  alongside Windows and Linux.
+- Added `mbuild` branch as a release trigger.
+- Added manual release trigger (`workflow_dispatch`).
+
 ## [0.5.0] - 2026-06-07
 
 ### Added
