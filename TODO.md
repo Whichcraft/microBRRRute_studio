@@ -4,9 +4,6 @@ Proposed improvements, roughly ordered by value. Done items move to
 [CHANGELOG.md](CHANGELOG.md).
 
 ## Audio engine
-- [ ] **Real-time gapless playback** via an optional `sounddevice` + `numpy`
-      backend (fall back to the current WAV-file player when unavailable). This
-      removes per-note temp-file churn and tightens timing/latency.
 - [ ] Per-step **gate length / accent / slide** to match MicroBrute Seq Step
       controls, instead of a fixed 82% gate.
 - [ ] **Pre-render the bank** once on Play instead of generating each WAV on the
@@ -17,8 +14,6 @@ Proposed improvements, roughly ordered by value. Done items move to
 - [ ] Click-and-drag to reorder steps.
 - [ ] **Count-in** option.
 - [ ] Configurable steps-per-bank and time signature (eighths vs sixteenths).
-
-- [ ] Recent-files menu.
 
 ## UI / UX
 - [ ] Dark theme / high-contrast option.

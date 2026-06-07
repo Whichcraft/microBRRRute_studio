@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.6.0] - 2026-06-07
+
+### Added
+- **Recent files menu** — a new "Open Recent" submenu in the File menu tracks
+  the 10 most recently used `.mbseq` files, persisted across app restarts in
+  `~/.microbrrrute_studio_recent.json`.
+
 ## [0.5.9] - 2026-06-07
 
 ### Added

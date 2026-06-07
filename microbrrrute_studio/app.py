@@ -2,6 +2,7 @@ from __future__ import annotations
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from pathlib import Path
+import json
 
 from .mbseq import MbseqProject, midi_to_name, name_to_midi, transpose_steps
 from .synth import play_note, get_last_audio_error, stop_all, render_steps_wav
@@ -41,6 +42,7 @@ class MbseqStudio(tk.Tk):
         self._play_banks: list[int] = []  # bank queue when playing all banks
         self.step_buttons: list[tk.Button] = []
         self.key_rects: dict[int, int] = {}
+        self.recent_files: list[str] = self._load_recent()
         self.play_btn: ttk.Button | None = None
         self.stop_btn: ttk.Button | None = None
 
@@ -133,6 +135,9 @@ class MbseqStudio(tk.Tk):
         m = tk.Menu(self)
         fm = tk.Menu(m, tearoff=False)
         fm.add_command(label='Open .mbseq', command=self.open_file)
+        self.recent_menu = tk.Menu(fm, tearoff=False)
+        fm.add_cascade(label='Open Recent', menu=self.recent_menu)
+        self._refresh_recent_menu()
         fm.add_command(label='Save', command=self.save_file)
         fm.add_command(label='Save As...', command=self.save_as)
         fm.add_separator()
@@ -191,6 +196,54 @@ class MbseqStudio(tk.Tk):
 
     def refresh_all(self):
         self.refresh_grid(); self.refresh_keyboard(); self.refresh_raw(); self.refresh_status()
+
+    def _recent_config_path(self) -> Path:
+        return Path.home() / '.microbrrrute_studio_recent.json'
+
+    def _load_recent(self) -> list[str]:
+        p = self._recent_config_path()
+        if p.exists():
+            try:
+                data = json.loads(p.read_text(encoding='utf-8'))
+                if isinstance(data, list):
+                    return [f for f in data if isinstance(f, str) and Path(f).exists()][:10]
+            except Exception:
+                pass
+        return []
+
+    def _save_recent(self):
+        try:
+            self._recent_config_path().write_text(json.dumps(self.recent_files), encoding='utf-8')
+        except Exception:
+            pass
+
+    def _add_recent(self, path: str | Path):
+        p = str(Path(path).absolute())
+        if p in self.recent_files:
+            self.recent_files.remove(p)
+        self.recent_files.insert(0, p)
+        self.recent_files = self.recent_files[:10]
+        self._save_recent()
+        self._refresh_recent_menu()
+
+    def _refresh_recent_menu(self):
+        if not hasattr(self, 'recent_menu'):
+            return
+        self.recent_menu.delete(0, 'end')
+        if not self.recent_files:
+            self.recent_menu.add_command(label='(No recent files)', state='disabled')
+        else:
+            for p in self.recent_files:
+                self.recent_menu.add_command(label=p, command=lambda x=p: self.open_recent(x))
+
+    def open_recent(self, path: str):
+        if not Path(path).exists():
+            messagebox.showerror('Open Recent', f'File not found: {path}')
+            self.recent_files.remove(path)
+            self._save_recent()
+            self._refresh_recent_menu()
+            return
+        self._do_open(path)
 
     def refresh_status(self):
         path = str(self.file_path) if self.file_path else 'unsaved'
@@ -489,6 +542,9 @@ class MbseqStudio(tk.Tk):
     def open_file(self):
         p = filedialog.askopenfilename(filetypes=[('MicroBrute sequence','*.mbseq'),('All files','*.*')])
         if not p: return
+        self._do_open(p)
+
+    def _do_open(self, p: str | Path):
         try:
             self.project = MbseqProject.load(p)
             self.file_path = Path(p)
@@ -496,21 +552,29 @@ class MbseqStudio(tk.Tk):
             self._undo.clear(); self._redo.clear()
             self.slot.set(1)
             self.cursor.set(0); self.refresh_all()
+            self._add_recent(p)
         except Exception as e:
             messagebox.showerror('Open failed', str(e))
 
     def save_file(self):
         if not self.file_path:
             return self.save_as()
+        self._do_save(self.file_path)
+
+    def _do_save(self, p: str | Path):
         try:
-            self.project.save(self.file_path); self.dirty = False; self.refresh_status()
+            self.project.save(p)
+            self.file_path = Path(p)
+            self.dirty = False
+            self.refresh_status()
+            self._add_recent(p)
         except Exception as e:
             messagebox.showerror('Save failed', str(e))
 
     def save_as(self):
         p = filedialog.asksaveasfilename(defaultextension='.mbseq', filetypes=[('MicroBrute sequence','*.mbseq'),('All files','*.*')])
         if not p: return
-        self.file_path = Path(p); self.save_file()
+        self._do_save(p)
 
     def apply_raw(self):
         try:
