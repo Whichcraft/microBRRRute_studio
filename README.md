@@ -36,8 +36,9 @@ Every version bump merged to `main` is built and published automatically by CI.
 ## ✨ Features
 
 - **Visual Piano Roll Editor.** An interactive canvas for viewing and editing
-  patterns across the full MicroBrute range (C0–C8). Click anywhere to place a
-  note; it syncs perfectly with the step grid and playhead.
+  patterns across the full MicroBrute range (C0–C8). **Zoom and pan** to
+  navigate complex patterns; click anywhere to place a note. Syncs perfectly
+  with the step grid and playhead.
 - **Musical Pattern Randomizer.** Generate coherent sequences within specific
   scales (Major, Minor, Pentatonic, Blues, etc.). Control root note, octave
   range, and density.

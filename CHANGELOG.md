@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.11.5] - 2026-06-07
+
+### Changed
+- Final documentation sync for the `v0.11.x` release series, ensuring all
+  features and shortcuts are accurately described.
+
 ## [0.11.4] - 2026-06-07
 
 ### Changed
