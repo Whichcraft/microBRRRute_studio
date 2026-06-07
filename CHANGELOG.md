@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.8.3] - 2026-06-07
+
+### Changed
+- Updated README to reflect the new bundled `.zip` release format and the
+  inclusion of the `around_the_world.mbseq` example in the download.
+
 ## [0.8.2] - 2026-06-07
 
 ### Added

@@ -17,8 +17,10 @@ single-file **Windows `.exe`** with PyInstaller.
 
 ## ⬇️ Download
 
-Prebuilt standalone executables for **Windows**, **Linux**, and **macOS** are
-attached to each release — no Python install required.
+**Compressed archives (.zip)** for **Windows**, **Linux**, and **macOS** are
+attached to each release. Each archive includes:
+1. The standalone **microBRRRute Studio** executable (no Python required).
+2. The **`around_the_world.mbseq`** example project.
 
 *(Note: macOS binaries are provided by CI but are currently untested as I have
 no Mac. Feedback is very welcome!)*
