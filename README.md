@@ -41,6 +41,10 @@ Every version bump merged to `main` is built and published automatically by CI.
 - **Musical Pattern Randomizer.** Generate coherent sequences within specific
   scales (Major, Minor, Pentatonic, Blues, etc.). Control root note, octave
   range, and density.
+- **Arpeggiator Tool.** Transform selected steps into complex arpeggios (Up,
+  Down, Up-Down, Random) with a single click.
+- **ADSR Envelope Controls.** Fine-tune the synth's character with persistent
+  Attack, Decay, Sustain, and Release settings.
 - **All 8 pattern banks with Custom Naming.** Switch between banks and give
   them descriptive names (e.g. "Intro", "Verse"). Names are saved directly in
   the `.mbseq` file.
@@ -78,8 +82,29 @@ Every version bump merged to `main` is built and published automatically by CI.
 - **Unsaved-changes guard.** Title bar shows `*` and app warns before quitting.
 - **Tooltips.** Hover over any button for help.
 
+---
+
+## 🎹 Keyboard Shortcuts
+
+| Shortcut | Action |
+| :--- | :--- |
+| `Space` | Start / Stop playback |
+| `Esc` | Stop playback immediately |
+| `R` / `Insert` | Set current step to Rest |
+| `Left` / `Right` | Move edit cursor |
+| `Ctrl + Z` | Undo |
+| `Ctrl + Y` | Redo |
+| `Ctrl + C` | Copy current step or selection |
+| `Ctrl + V` | Paste from clipboard |
+| `Ctrl+Shift+C` | Copy entire pattern bank |
+| `Ctrl+Shift+V` | Paste entire pattern bank |
+| `Ctrl + N` | Rename current bank |
+| `Ctrl + R` | Open Pattern Randomizer |
+| `Ctrl + Wheel`| Zoom Piano Roll |
+| `MouseWheel` | Pan Piano Roll vertically |
 
 ---
+
 
 ## 🚀 Run from source
 

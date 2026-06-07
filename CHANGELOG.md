@@ -10,6 +10,13 @@ _Nothing yet._
 
 ## [0.11.1] - 2026-06-07
 
+### Added
+- **Arpeggiator Tool** — transform selected steps into complex arpeggios (Up,
+  Down, Up-Down, Random) with a single click.
+- **ADSR Envelope Controls** — Added persistent Attack, Decay, Sustain, and
+  Release settings to the software synth.
+- **Improved Shortcuts** — added a summary of keyboard shortcuts to the README.
+
 ### Changed
 - Hardened the release pruning logic to ensure all old releases and orphaned
   tags are removed before a new release is published.
