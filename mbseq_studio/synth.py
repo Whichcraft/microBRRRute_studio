@@ -1,17 +1,30 @@
 from __future__ import annotations
-import math, struct, tempfile, wave, threading, os, sys, subprocess, uuid
+import math, struct, tempfile, wave, threading, os, sys, subprocess, time, uuid
 from pathlib import Path
 
 A4 = 440.0
 _last_error: str | None = None
 
+# Playback engine state -------------------------------------------------------
+# The MicroBrute is a monophonic synth, so preview playback is monophonic too:
+# starting a new note stops the previous one. Stop must silence audio *now*, so
+# we track the in-flight subprocesses (Linux/macOS) and use SND_PURGE (Windows).
+_IS_WINDOWS = sys.platform.startswith('win')
+_IS_MAC = sys.platform == 'darwin'
+_lock = threading.Lock()
+_active_procs: set[subprocess.Popen] = set()
+
+
 def get_last_audio_error() -> str | None:
     return _last_error
+
 
 def midi_freq(note: int) -> float:
     return A4 * (2 ** ((note - 69) / 12))
 
-def make_wave(path: Path, note: int, duration: float = 0.18, wave_shape: str = 'square', volume: float = 0.25, sample_rate: int = 44100) -> None:
+
+def make_wave(path: Path, note: int, duration: float = 0.18, wave_shape: str = 'square',
+              volume: float = 0.25, sample_rate: int = 44100) -> None:
     total = max(1, int(duration * sample_rate))
     freq = midi_freq(note)
     amp = int(32767 * max(0.0, min(volume, 1.0)))
@@ -41,40 +54,81 @@ def make_wave(path: Path, note: int, duration: float = 0.18, wave_shape: str = '
             frames += struct.pack('<h', int(val * amp * env))
         w.writeframes(frames)
 
+
+def stop_all() -> None:
+    """Immediately silence any audio currently playing.
+
+    This is what makes the Stop button actually stop sound: the old version only
+    cancelled the *scheduler*, leaving the in-flight note ringing out.
+    """
+    if _IS_WINDOWS:
+        try:
+            import winsound
+            winsound.PlaySound(None, winsound.SND_PURGE)
+        except Exception:
+            pass
+        return
+    with _lock:
+        procs = list(_active_procs)
+        _active_procs.clear()
+    for p in procs:
+        try:
+            p.terminate()
+        except Exception:
+            pass
+
+
+def _play_unix(tmp: Path, duration: float) -> None:
+    global _last_error
+    players = [['afplay', str(tmp)]] if _IS_MAC else [['aplay', '-q', str(tmp)], ['paplay', str(tmp)]]
+    errors: list[str] = []
+    for cmd in players:
+        try:
+            p = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        except FileNotFoundError as exc:
+            errors.append(str(exc))
+            continue
+        with _lock:
+            _active_procs.add(p)
+        try:
+            _, err = p.communicate(timeout=max(1.0, duration + 3))
+        except subprocess.TimeoutExpired:
+            p.kill()
+            err = b''
+        finally:
+            with _lock:
+                _active_procs.discard(p)
+        if p.returncode == 0:
+            _last_error = None
+            return
+        # A negative return code means we terminated it via stop_all(); not an error.
+        if p.returncode is not None and p.returncode < 0:
+            return
+        errors.append(err.decode(errors='ignore') if err else f'exit {p.returncode}')
+    _last_error = 'No Linux/macOS audio player worked: ' + ' | '.join(errors)
+
+
 def play_note(note: int, duration: float = 0.18, wave_shape: str = 'square', volume: float = 0.25) -> None:
     """Play one generated note in a background thread.
 
-    v3 reused the same temp filename for repeated notes. That can race on Windows
-    during sequencer playback: one thread can delete/replace the WAV while another
-    is still opening it. v4 uses a unique filename and stores the last backend error.
+    Uses a unique temp filename per note to avoid the Windows playback race where
+    one thread deletes the WAV while another is still opening it. Backend errors
+    are stored and surfaced via get_last_audio_error().
     """
     def worker():
         global _last_error
         tmp = Path(tempfile.gettempdir()) / f'mbseq_note_{os.getpid()}_{uuid.uuid4().hex}_{note}.wav'
         try:
             make_wave(tmp, note, duration, wave_shape, volume)
-            if sys.platform.startswith('win'):
+            if _IS_WINDOWS:
                 import winsound
-                winsound.PlaySound(str(tmp), winsound.SND_FILENAME)
-            elif sys.platform == 'darwin':
-                r = subprocess.run(['afplay', str(tmp)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                if r.returncode != 0:
-                    raise RuntimeError('afplay returned non-zero exit code')
+                # SND_ASYNC: returns immediately and a new note interrupts the old
+                # one (monophonic, matching the hardware). stop_all() purges it.
+                winsound.PlaySound(str(tmp), winsound.SND_FILENAME | winsound.SND_ASYNC)
+                time.sleep(duration + 0.05)
+                _last_error = None
             else:
-                played = False
-                errors = []
-                for cmd in (['aplay', str(tmp)], ['paplay', str(tmp)]):
-                    try:
-                        r = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=3)
-                        if r.returncode == 0:
-                            played = True
-                            break
-                        errors.append(r.stderr.decode(errors='ignore'))
-                    except Exception as exc:
-                        errors.append(str(exc))
-                if not played:
-                    raise RuntimeError('No Linux audio player worked: ' + ' | '.join(errors))
-            _last_error = None
+                _play_unix(tmp, duration)
         except Exception as exc:
             _last_error = str(exc)
         finally:

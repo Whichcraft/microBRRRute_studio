@@ -4,7 +4,7 @@ from tkinter import ttk, filedialog, messagebox
 from pathlib import Path
 
 from .mbseq import MbseqProject, midi_to_name, name_to_midi
-from .synth import play_note, get_last_audio_error
+from .synth import play_note, get_last_audio_error, stop_all
 from .midi_export import export_midi
 
 WHITE_OFFSETS = [0,2,4,5,7,9,11,12,14,16,17,19,21,23,24]
@@ -28,13 +28,21 @@ class MbseqStudio(tk.Tk):
         self.tempo = tk.IntVar(value=120)
         self.wave_shape = tk.StringVar(value='square')
         self.volume = tk.DoubleVar(value=0.28)
+        self.loop = tk.BooleanVar(value=True)
         self.playing = False
+        self.dirty = False
         self._after_id = None
+        self._play_idx = 0
+        self._playhead = -1            # step currently sounding (-1 = none)
+        self._play_banks: list[int] = []  # bank queue when playing all banks
         self.step_buttons: list[tk.Button] = []
         self.key_buttons: dict[int, tk.Button] = {}
+        self.play_btn: ttk.Button | None = None
+        self.stop_btn: ttk.Button | None = None
 
         self._build()
         self._bind_keys()
+        self.protocol('WM_DELETE_WINDOW', self.on_close)
         self.refresh_all()
 
     def _build(self):
@@ -54,9 +62,13 @@ class MbseqStudio(tk.Tk):
         ttk.Button(top, text='Save', command=self.save_file).pack(side='left', padx=3)
         ttk.Button(top, text='Save As', command=self.save_as).pack(side='left')
         ttk.Separator(top, orient='vertical').pack(side='left', fill='y', padx=10)
-        ttk.Button(top, text='▶ Play Bank', command=self.play_sequence).pack(side='left')
+        self.play_btn = ttk.Button(top, text='▶ Play Bank', command=self.play_sequence)
+        self.play_btn.pack(side='left')
+        ttk.Button(top, text='▶▶ Play All', command=self.play_all_banks).pack(side='left', padx=3)
+        self.stop_btn = ttk.Button(top, text='■ Stop', command=self.stop_sequence, state='disabled')
+        self.stop_btn.pack(side='left', padx=3)
+        ttk.Checkbutton(top, text='Loop', variable=self.loop).pack(side='left')
         ttk.Button(top, text='Test Sound', command=lambda: self.preview_note(60)).pack(side='left', padx=3)
-        ttk.Button(top, text='■ Stop', command=self.stop_sequence).pack(side='left', padx=3)
         ttk.Label(top, text='BPM').pack(side='left', padx=(10,2))
         ttk.Spinbox(top, from_=30, to=300, textvariable=self.tempo, width=5).pack(side='left')
         ttk.Button(top, text='Export Bank MIDI', command=self.export_midi_file).pack(side='left', padx=4)
@@ -120,6 +132,7 @@ class MbseqStudio(tk.Tk):
 
     def _bind_keys(self):
         self.bind('<space>', lambda e: self.insert_rest())
+        self.bind('<Escape>', lambda e: self.stop_sequence())
         self.bind('<Left>', lambda e: self.move_cursor(-1))
         self.bind('<Right>', lambda e: self.move_cursor(1))
         for idx, key in enumerate(PC_KEYS[:25]):
@@ -141,7 +154,20 @@ class MbseqStudio(tk.Tk):
         path = str(self.file_path) if self.file_path else 'unsaved'
         cur = self.cursor.get()+1
         loaded = ','.join(str(i) for i in range(1, 9) if i in self.project.sequences)
-        self.status.config(text=f'{path} | Bank {self.slot.get()}/8 | Steps {len(self.steps())} | Cursor {cur} | Banks: {loaded}')
+        flag = ' *modified' if self.dirty else ''
+        self.status.config(text=f'{path}{flag} | Bank {self.slot.get()}/8 | Steps {len(self.steps())} | Cursor {cur} | Banks: {loaded}')
+        name = self.file_path.name if self.file_path else 'untitled'
+        self.title(f'{"*" if self.dirty else ""}{name} - MBSEQ Studio')
+
+    def mark_dirty(self):
+        self.dirty = True
+
+    def on_close(self):
+        self.stop_sequence()
+        if self.dirty and not messagebox.askokcancel('Unsaved changes',
+                'You have unsaved changes. Quit without saving?'):
+            return
+        self.destroy()
 
     def refresh_raw(self):
         self.raw.delete('1.0','end')
@@ -156,7 +182,12 @@ class MbseqStudio(tk.Tk):
         for i, n in enumerate(steps):
             ttk.Label(self.grid_inner, text=str(i+1), anchor='center').grid(row=0,column=i, padx=1)
             txt = 'REST\nx' if n is None else f'{midi_to_name(n)}\n{n}'
-            bg = '#d7f0ff' if i == self.cursor.get() else '#ffffff'
+            if i == self._playhead:
+                bg = '#7CFC8A'  # green = currently sounding
+            elif i == self.cursor.get():
+                bg = '#d7f0ff'  # blue = edit cursor
+            else:
+                bg = '#ffffff'
             b = tk.Button(self.grid_inner, text=txt, width=7, height=3, bg=bg, command=lambda x=i: self.select_step(x))
             b.grid(row=1,column=i, padx=1, pady=2)
             b.bind('<Button-3>', lambda e, x=i: self.set_step_rest(x))
@@ -197,6 +228,7 @@ class MbseqStudio(tk.Tk):
         idx = self.cursor.get()
         if idx >= len(steps): steps.append(note)
         else: steps[idx] = note
+        self.mark_dirty()
         self.move_cursor(1, refresh=False)
         self.refresh_grid(); self.refresh_raw()
 
@@ -204,6 +236,7 @@ class MbseqStudio(tk.Tk):
         steps = self.steps(); idx = self.cursor.get()
         if idx >= len(steps): steps.append(None)
         else: steps[idx] = None
+        self.mark_dirty()
         self.move_cursor(1, refresh=False)
         self.refresh_grid(); self.refresh_raw()
 
@@ -213,7 +246,7 @@ class MbseqStudio(tk.Tk):
         if n is not None: self.preview_note(n)
 
     def set_step_rest(self, idx:int):
-        self.steps()[idx] = None; self.cursor.set(idx); self.refresh_grid(); self.refresh_raw()
+        self.steps()[idx] = None; self.mark_dirty(); self.cursor.set(idx); self.refresh_grid(); self.refresh_raw()
 
     def move_cursor(self, delta:int, refresh=True):
         self.cursor.set(max(0, min(len(self.steps())-1, self.cursor.get()+delta)))
@@ -224,19 +257,21 @@ class MbseqStudio(tk.Tk):
 
     def add_step(self):
         steps = self.steps(); idx = self.cursor.get()+1
-        steps.insert(idx, None); self.cursor.set(idx); self.refresh_grid(); self.refresh_raw()
+        steps.insert(idx, None); self.mark_dirty(); self.cursor.set(idx); self.refresh_grid(); self.refresh_raw()
 
     def delete_step(self):
         steps = self.steps()
         if not steps: return
         steps.pop(self.cursor.get())
         if not steps: steps.append(None)
+        self.mark_dirty()
         self.cursor.set(min(self.cursor.get(), len(steps)-1))
         self.refresh_grid(); self.refresh_raw()
 
     def clear_slot(self):
         if messagebox.askyesno('Clear bank', f'Clear pattern bank {self.slot.get()}?'):
             self.project.sequences[int(self.slot.get())] = [None]*16
+            self.mark_dirty()
             self.cursor.set(0); self.refresh_all()
 
 
@@ -256,6 +291,7 @@ class MbseqStudio(tk.Tk):
                 return
             if messagebox.askyesno('Overwrite bank', f'Overwrite bank {dst} with bank {src}?'):
                 self.project.sequences[dst] = list(self.project.sequences[src])
+                self.mark_dirty()
                 self.slot.set(dst)
                 self.cursor.set(0)
                 win.destroy()
@@ -269,6 +305,7 @@ class MbseqStudio(tk.Tk):
         try:
             self.project = MbseqProject.load(p)
             self.file_path = Path(p)
+            self.dirty = False
             self.slot.set(1)
             self.cursor.set(0); self.refresh_all()
         except Exception as e:
@@ -278,7 +315,7 @@ class MbseqStudio(tk.Tk):
         if not self.file_path:
             return self.save_as()
         try:
-            self.project.save(self.file_path); self.refresh_status()
+            self.project.save(self.file_path); self.dirty = False; self.refresh_status()
         except Exception as e:
             messagebox.showerror('Save failed', str(e))
 
@@ -292,6 +329,7 @@ class MbseqStudio(tk.Tk):
             self.project = MbseqProject.parse(self.raw.get('1.0','end'))
             if int(self.slot.get()) not in self.project.sequences:
                 self.slot.set(1)
+            self.mark_dirty()
             self.cursor.set(0); self.refresh_grid(); self.refresh_keyboard(); self.refresh_status()
         except Exception as e:
             messagebox.showerror('Raw parse failed', str(e))
@@ -326,22 +364,62 @@ class MbseqStudio(tk.Tk):
 
     def play_sequence(self):
         self.stop_sequence()
+        self._play_banks = [int(self.slot.get())]
+        self._start_playback()
+
+    def play_all_banks(self):
+        self.stop_sequence()
+        banks = [b for b in range(1, 9) if any(n is not None for n in self.project.sequences.get(b, []))]
+        if not banks:
+            messagebox.showinfo('Play All', 'All banks are empty.')
+            return
+        self._play_banks = banks
+        self._start_playback()
+
+    def _start_playback(self):
+        if not any(self.project.sequences.get(b) for b in self._play_banks):
+            messagebox.showinfo('Play', 'Nothing to play (no steps).')
+            return
         self.playing = True
         self._play_idx = 0
+        self.slot.set(self._play_banks[0])
+        if self.play_btn: self.play_btn.config(state='disabled')
+        if self.stop_btn: self.stop_btn.config(state='normal')
+        self.refresh_all()
         self._play_tick()
 
     def _play_tick(self):
         if not self.playing: return
         steps = self.steps()
-        if not steps: return self.stop_sequence()
-        idx = self._play_idx % len(steps)
-        self.cursor.set(idx); self.refresh_grid()
-        note = steps[idx]
         ms = int(60000 / max(1, self.tempo.get()) / 2)  # eighth-note-ish steps
+        if not steps or self._play_idx >= len(steps):
+            return self._advance_bank()
+        idx = self._play_idx
+        self._playhead = idx
+        self.refresh_grid()
+        note = steps[idx]
         if note is not None:
             self.preview_note(note, duration=max(0.05, ms / 1000 * 0.82))
         self._play_idx += 1
         self._after_id = self.after(ms, self._play_tick)
+
+    def _advance_bank(self):
+        """Reached the end of the current bank's steps; move on or stop."""
+        current = int(self.slot.get())
+        order = self._play_banks
+        pos = order.index(current) if current in order else 0
+        if pos + 1 < len(order):
+            next_bank = order[pos + 1]         # next bank in the queue
+        elif self.loop.get():
+            next_bank = order[0]               # wrap back to the first bank
+        else:
+            return self.stop_sequence()
+        self.slot.set(next_bank)
+        self._play_idx = 0
+        self._playhead = -1
+        self.refresh_all()
+        # Schedule (don't recurse) so an empty bank can't blow the stack.
+        self._after_id = self.after(1, self._play_tick)
 
     def stop_sequence(self):
         self.playing = False
@@ -349,6 +427,11 @@ class MbseqStudio(tk.Tk):
             try: self.after_cancel(self._after_id)
             except Exception: pass
             self._after_id = None
+        stop_all()                             # silence the in-flight note now
+        self._playhead = -1
+        if self.play_btn: self.play_btn.config(state='normal')
+        if self.stop_btn: self.stop_btn.config(state='disabled')
+        self.refresh_grid()
 
 
 def main():
