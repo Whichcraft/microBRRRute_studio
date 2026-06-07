@@ -67,6 +67,20 @@ class MbseqProject:
     def save(self, path: str | Path) -> None:
         Path(path).write_text(self.serialize(), encoding='utf-8', newline='\n')
 
+def transpose_steps(steps: list[int | None], semitones: int) -> list[int | None]:
+    """Transpose notes by `semitones`, leaving rests untouched.
+
+    Notes that would fall outside the MIDI range 0..127 are clamped.
+    """
+    out: list[int | None] = []
+    for n in steps:
+        if n is None:
+            out.append(None)
+        else:
+            out.append(max(0, min(127, n + semitones)))
+    return out
+
+
 NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 FLAT_TO_SHARP = {'DB':'C#','EB':'D#','GB':'F#','AB':'G#','BB':'A#'}
 

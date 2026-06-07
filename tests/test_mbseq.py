@@ -3,9 +3,9 @@ import struct
 import wave
 from pathlib import Path
 
-from mbseq_studio.mbseq import MbseqProject, midi_to_name, name_to_midi
-from mbseq_studio.midi_export import export_midi, vlq
-from mbseq_studio.synth import make_wave, midi_freq
+from mbseq_studio.mbseq import MbseqProject, midi_to_name, name_to_midi, transpose_steps
+from mbseq_studio.midi_export import export_midi, export_song_midi, import_midi, vlq
+from mbseq_studio.synth import make_wave, midi_freq, render_steps_wav
 
 
 def test_parse_roundtrip():
@@ -93,3 +93,42 @@ def test_make_wave_writes_pcm(tmp_path):
 
 def test_midi_freq_a4():
     assert abs(midi_freq(69) - 440.0) < 1e-6
+
+
+def test_transpose_clamps_and_keeps_rests():
+    assert transpose_steps([60, None, 62], 2) == [62, None, 64]
+    assert transpose_steps([0, 127], -5) == [0, 122]      # low clamp
+    assert transpose_steps([120, 127], 12) == [127, 127]  # high clamp
+
+
+def test_midi_roundtrip(tmp_path):
+    p = tmp_path / "rt.mid"
+    steps = [60, None, 64, 67, None, 72]
+    export_midi(p, steps, bpm=120)
+    # import recovers notes and internal rests (trailing rest is dropped)
+    assert import_midi(p) == [60, None, 64, 67, None, 72]
+
+
+def test_import_rejects_non_midi(tmp_path):
+    p = tmp_path / "bad.mid"
+    p.write_bytes(b"not a midi file at all")
+    try:
+        import_midi(p)
+    except ValueError:
+        return
+    raise AssertionError("expected ValueError for non-MIDI input")
+
+
+def test_export_song_concatenates(tmp_path):
+    p = tmp_path / "song.mid"
+    export_song_midi(p, [[60, 62], [64, None, 67]], bpm=120)
+    assert import_midi(p) == [60, 62, 64, None, 67]
+
+
+def test_render_steps_wav(tmp_path):
+    p = tmp_path / "bounce.wav"
+    render_steps_wav(p, [60, None, 64], bpm=120, wave_shape="saw", volume=0.4)
+    with wave.open(str(p)) as w:
+        # 3 steps * (eighth note at 120bpm = 0.25s) * 44100 frames
+        assert abs(w.getnframes() - int(3 * 0.25 * 44100)) <= 3
+        assert w.getnchannels() == 1

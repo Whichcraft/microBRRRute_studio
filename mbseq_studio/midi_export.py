@@ -31,3 +31,83 @@ def export_midi(path: str | Path, steps: list[int | None], bpm: int = 120, ticks
     header = b'MThd' + (6).to_bytes(4,'big') + (0).to_bytes(2,'big') + (1).to_bytes(2,'big') + tpq.to_bytes(2,'big')
     chunk = b'MTrk' + len(track).to_bytes(4,'big') + bytes(track)
     Path(path).write_bytes(header + chunk)
+
+
+def export_song_midi(path: str | Path, banks: list[list[int | None]], bpm: int = 120,
+                     ticks_per_step: int = 240, gate: float = 0.8) -> None:
+    """Export several banks concatenated end-to-end into one MIDI file."""
+    combined: list[int | None] = []
+    for steps in banks:
+        combined.extend(steps)
+    export_midi(path, combined, bpm=bpm, ticks_per_step=ticks_per_step, gate=gate)
+
+
+def read_vlq(data: bytes, i: int) -> tuple[int, int]:
+    value = 0
+    while True:
+        b = data[i]
+        i += 1
+        value = (value << 7) | (b & 0x7F)
+        if not (b & 0x80):
+            return value, i
+
+
+def import_midi(path: str | Path, ticks_per_step: int | None = None) -> list[int | None]:
+    """Parse a Standard MIDI File into a monophonic step list.
+
+    Note-on events are quantized onto a fixed step grid; grid cells with no note
+    become rests. This recovers files written by export_midi exactly and gives a
+    reasonable approximation for arbitrary monophonic MIDI.
+    """
+    data = Path(path).read_bytes()
+    if data[:4] != b'MThd':
+        raise ValueError('Not a Standard MIDI File (missing MThd header)')
+    division = int.from_bytes(data[12:14], 'big')
+    if division & 0x8000:
+        raise ValueError('SMPTE time division is not supported')
+    tpq = division or 480
+    if ticks_per_step is None:
+        ticks_per_step = max(1, tpq // 2)  # eighth-note grid, matching export
+
+    events: list[tuple[int, int]] = []  # (absolute_tick, note)
+    i = 14
+    while i + 8 <= len(data):
+        if data[i:i+4] != b'MTrk':
+            break
+        length = int.from_bytes(data[i+4:i+8], 'big')
+        i += 8
+        end = i + length
+        t = 0
+        status = 0
+        while i < end:
+            delta, i = read_vlq(data, i)
+            t += delta
+            b = data[i]
+            if b & 0x80:
+                status = b
+                i += 1
+            # else: running status reuses the previous `status` byte
+            ev = status & 0xF0
+            if status == 0xFF:           # meta event
+                i += 1
+                mlen, i = read_vlq(data, i)
+                i += mlen
+            elif ev in (0xC0, 0xD0):     # program change / channel pressure: 1 data byte
+                i += 1
+            elif ev in (0x90, 0x80, 0xA0, 0xB0, 0xE0):
+                note, vel = data[i], data[i+1]
+                i += 2
+                if ev == 0x90 and vel > 0:
+                    events.append((t, note))
+            else:
+                i += 1  # unknown byte: advance to stay in sync
+        i = end
+
+    if not events:
+        return []
+    events.sort()
+    last_step = events[-1][0] // ticks_per_step
+    steps: list[int | None] = [None] * (last_step + 1)
+    for t, note in events:
+        steps[t // ticks_per_step] = note  # last note in a grid cell wins
+    return steps

@@ -55,6 +55,54 @@ def make_wave(path: Path, note: int, duration: float = 0.18, wave_shape: str = '
         w.writeframes(frames)
 
 
+def _osc_sample(phase: float, wave_shape: str) -> float:
+    if wave_shape == 'sine':
+        return math.sin(2 * math.pi * phase)
+    if wave_shape == 'saw':
+        return 2 * phase - 1
+    if wave_shape == 'triangle':
+        return 4 * abs(phase - 0.5) - 1
+    return 1.0 if phase < 0.5 else -1.0
+
+
+def render_steps_wav(path: Path | str, steps: list[int | None], bpm: int = 120,
+                     wave_shape: str = 'square', volume: float = 0.25, gate: float = 0.82,
+                     sample_rate: int = 44100) -> None:
+    """Bounce a step list to a single WAV file (offline render, no playback).
+
+    Each step lasts an eighth note at the given tempo; notes sound for `gate` of
+    the step and rests/tails are silence.
+    """
+    step_secs = 60.0 / max(1, bpm) / 2
+    step_frames = max(1, int(step_secs * sample_rate))
+    note_frames = max(1, int(step_frames * gate))
+    amp = int(32767 * max(0.0, min(volume, 1.0)))
+    attack = max(1, int(0.008 * sample_rate))
+    release = max(1, int(0.035 * sample_rate))
+    with wave.open(str(path), 'wb') as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(sample_rate)
+        for note in steps:
+            frames = bytearray()
+            if note is None:
+                frames += b'\x00\x00' * step_frames
+            else:
+                freq = midi_freq(note)
+                for i in range(step_frames):
+                    if i >= note_frames:
+                        frames += b'\x00\x00'
+                        continue
+                    phase = (freq * (i / sample_rate)) % 1.0
+                    env = 1.0
+                    if i < attack:
+                        env = i / attack
+                    if i > note_frames - release:
+                        env = min(env, (note_frames - i) / release)
+                    frames += struct.pack('<h', int(_osc_sample(phase, wave_shape) * amp * env))
+            w.writeframes(bytes(frames))
+
+
 def stop_all() -> None:
     """Immediately silence any audio currently playing.
 

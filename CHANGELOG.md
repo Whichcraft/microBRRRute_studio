@@ -7,9 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **Undo / redo** (`Ctrl+Z` / `Ctrl+Y`, also in the new Edit menu) across all
+  editing operations, with a 100-step history.
+- **Transpose** the selected bank by ±1 semitone or ±1 octave (toolbar buttons),
+  clamped to the MIDI range.
+- **Import a MIDI file** into the selected bank (quantized onto the step grid,
+  truncated to 64 steps).
+- **Export song** — all non-empty banks concatenated into one MIDI file.
+- **Export bank to WAV** — offline render of the selected bank using the current
+  oscillator/volume.
+- **Space = Play/Stop** (DAW convention); `R` / `Insert` now insert a rest.
 - Enforce the MicroBrute SE hardware limit of **64 steps per pattern bank**: the
   editor refuses to grow a bank past 64 (with a status-bar notice) and the
   parser rejects files/raw text that exceed it.
+- `pyproject.toml` packaging (installable via `pip install -e .`, `mbseq-studio`
+  entry point) and a **GitHub Actions CI** workflow running the headless tests on
+  Linux/Windows/macOS across Python 3.10 and 3.12.
 
 ### Fixed
 - Startup crash binding the non-ASCII `ö` PC key; unbindable keys are now

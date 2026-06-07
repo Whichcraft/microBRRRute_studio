@@ -14,31 +14,23 @@ Proposed improvements, roughly ordered by value. Done items move to
 - [ ] Anti-click: short crossfade between consecutive notes.
 
 ## Editing & workflow
-- [ ] **Undo / redo** stack (`Ctrl+Z` / `Ctrl+Y`).
 - [ ] **Copy / paste** steps and ranges between banks.
-- [ ] **Transpose** selected bank by semitones / octaves.
 - [ ] Click-and-drag to **reorder** steps.
 - [ ] **Metronome / count-in** option.
 - [ ] Configurable **steps-per-bank** and time signature (eighths vs sixteenths).
 - [ ] Recent-files menu.
 
 ## UI / UX
-- [ ] **Space = Play/Stop** (DAW convention); move "insert rest" to another key.
 - [ ] Visual feedback on the on-screen keyboard for the playing note.
 - [ ] Dark theme / high-contrast option.
 - [ ] Resizable, scrollable step grid that reflows on window resize.
 - [ ] Tooltips on transport and editor buttons.
 
 ## Import / export
-- [ ] **Import a MIDI file** into a bank (quantize to steps).
-- [ ] Export **all banks as one** multi-track or concatenated MIDI song.
-- [ ] Export to **WAV** (bounce the synth render to disk).
 - [ ] Drag-and-drop `.mbseq` files onto the window to open.
+- [ ] Export the whole song to a single WAV (currently per-bank only).
 
 ## Quality / infra
-- [ ] Add `pytest` to dev dependencies and a **GitHub Actions CI** workflow
-      (lint + headless tests on Linux/Windows/macOS).
 - [ ] Type-check with `mypy` / `ruff` in CI.
-- [ ] Package metadata (`pyproject.toml`) so it can be `pip install`ed.
 - [ ] App icon and Windows version-info resource for the EXE.
 - [ ] Validate notes against the MicroBrute's actual playable range.

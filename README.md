@@ -1,5 +1,7 @@
 # 🎹 MBSEQ Studio
 
+[![CI](https://github.com/Whichcraft/mbseq_studio/actions/workflows/ci.yml/badge.svg)](https://github.com/Whichcraft/mbseq_studio/actions/workflows/ci.yml)
+
 **A desktop composer for Arturia MicroBrute SE sequences.**
 
 MBSEQ Studio is a lightweight Python/Tkinter app for creating, editing and
@@ -31,12 +33,15 @@ single-file **Windows `.exe`** with PyInstaller.
   - **Loop** toggle for continuous playback.
   - A green **playhead** highlights the step that's sounding, distinct from the
     blue edit cursor.
-- **Step editor** — add / delete steps, insert rests (`Space`), clear or
-  duplicate a whole bank.
+- **Step editor** — add / delete steps, insert rests (`R`), transpose a bank by
+  semitone or octave, clear or duplicate a whole bank. Banks are capped at the
+  MicroBrute's **64-step** hardware limit.
+- **Undo / redo** (`Ctrl+Z` / `Ctrl+Y`) across every edit.
 - **Raw text view** — edit the underlying `.mbseq` text directly and apply it
   back, with validation.
-- **MIDI export** — export the selected bank, or all 8 banks as separate `.mid`
-  files (handwritten Standard MIDI File writer, no dependencies).
+- **Import & export** — import a MIDI file into a bank; export the selected
+  bank, all 8 banks separately, or the whole song concatenated as MIDI; bounce a
+  bank to **WAV**. (Handwritten Standard MIDI File reader/writer — no deps.)
 - **Unsaved-changes guard** — the title bar shows a `*` when modified and the
   app asks before you quit on unsaved work.
 
@@ -81,9 +86,11 @@ The data layer (parsing, serialization, MIDI export, waveform generation) is
 covered by headless tests that need no display or audio device:
 
 ```bash
-pip install pytest
+pip install -e ".[dev]"
 pytest
 ```
+
+CI runs these on Linux, Windows and macOS (Python 3.10 & 3.12) on every push.
 
 ---
 

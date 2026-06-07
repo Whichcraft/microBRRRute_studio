@@ -3,9 +3,9 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from pathlib import Path
 
-from .mbseq import MbseqProject, midi_to_name, name_to_midi
-from .synth import play_note, get_last_audio_error, stop_all
-from .midi_export import export_midi
+from .mbseq import MbseqProject, midi_to_name, name_to_midi, transpose_steps
+from .synth import play_note, get_last_audio_error, stop_all, render_steps_wav
+from .midi_export import export_midi, export_song_midi, import_midi
 
 MAX_STEPS = 64  # MicroBrute SE hardware limit: 64 steps per pattern bank
 WHITE_OFFSETS = [0,2,4,5,7,9,11,12,14,16,17,19,21,23,24]
@@ -32,6 +32,8 @@ class MbseqStudio(tk.Tk):
         self.loop = tk.BooleanVar(value=True)
         self.playing = False
         self.dirty = False
+        self._undo: list[dict[int, list[int | None]]] = []
+        self._redo: list[dict[int, list[int | None]]] = []
         self._after_id = None
         self._play_idx = 0
         self._playhead = -1            # step currently sounding (-1 = none)
@@ -73,8 +75,9 @@ class MbseqStudio(tk.Tk):
         ttk.Label(top, text='BPM').pack(side='left', padx=(10,2))
         ttk.Spinbox(top, from_=30, to=300, textvariable=self.tempo, width=5).pack(side='left')
         ttk.Button(top, text='Export Bank MIDI', command=self.export_midi_file).pack(side='left', padx=4)
-        ttk.Button(top, text='Export All Banks MIDI', command=self.export_all_midi_files).pack(side='left', padx=4)
-        ttk.Button(top, text='Show Audio Error', command=self.show_audio_error).pack(side='left')
+        ttk.Button(top, text='Export Song MIDI', command=self.export_song_midi_file).pack(side='left', padx=2)
+        ttk.Button(top, text='Export Bank WAV', command=self.export_bank_wav).pack(side='left', padx=2)
+        ttk.Button(top, text='Show Audio Error', command=self.show_audio_error).pack(side='left', padx=(6,0))
 
         edit = ttk.Frame(self, padding=(8,0,8,6))
         edit.pack(fill='x')
@@ -83,6 +86,11 @@ class MbseqStudio(tk.Tk):
         ttk.Button(edit, text='Rest at Cursor', command=self.insert_rest).pack(side='left', padx=3)
         ttk.Button(edit, text='Clear Bank', command=self.clear_slot).pack(side='left', padx=10)
         ttk.Button(edit, text='Duplicate Bank To...', command=self.duplicate_bank_dialog).pack(side='left', padx=3)
+        ttk.Label(edit, text='Transpose').pack(side='left', padx=(14,3))
+        ttk.Button(edit, text='-12', width=4, command=lambda: self.transpose_bank(-12)).pack(side='left')
+        ttk.Button(edit, text='-1', width=4, command=lambda: self.transpose_bank(-1)).pack(side='left')
+        ttk.Button(edit, text='+1', width=4, command=lambda: self.transpose_bank(1)).pack(side='left')
+        ttk.Button(edit, text='+12', width=4, command=lambda: self.transpose_bank(12)).pack(side='left')
         ttk.Label(edit, text='Oscillator').pack(side='left', padx=(20,3))
         ttk.Combobox(edit, textvariable=self.wave_shape, values=['square','saw','triangle','sine'], width=9, state='readonly').pack(side='left')
         ttk.Label(edit, text='Volume').pack(side='left', padx=(14,3))
@@ -102,7 +110,7 @@ class MbseqStudio(tk.Tk):
 
         kb_wrap = ttk.Frame(self, padding=8)
         kb_wrap.pack(fill='x')
-        ttk.Label(kb_wrap, text='MicroBrute 25-key composer: click key = insert/play, right-click key = preview only. PC keys: A W S E D F T G Y H U J K ...').pack(anchor='w')
+        ttk.Label(kb_wrap, text='MicroBrute 25-key composer: click key = insert/play, right-click = preview. PC keys A W S E D F T G Y H U J K ... | Space = Play/Stop, R = rest, Esc = stop, Ctrl+Z/Y = undo/redo').pack(anchor='w')
         self.keyboard = tk.Canvas(kb_wrap, width=1030, height=210, bg='#666666', highlightthickness=0)
         self.keyboard.pack(fill='x', pady=6)
 
@@ -124,16 +132,29 @@ class MbseqStudio(tk.Tk):
         fm.add_command(label='Save', command=self.save_file)
         fm.add_command(label='Save As...', command=self.save_as)
         fm.add_separator()
+        fm.add_command(label='Import MIDI into selected bank...', command=self.import_midi_file)
+        fm.add_separator()
         fm.add_command(label='Export selected bank as MIDI...', command=self.export_midi_file)
         fm.add_command(label='Export all 8 banks as MIDI files...', command=self.export_all_midi_files)
+        fm.add_command(label='Export song (all banks) as one MIDI...', command=self.export_song_midi_file)
+        fm.add_command(label='Export selected bank as WAV...', command=self.export_bank_wav)
         fm.add_separator()
-        fm.add_command(label='Exit', command=self.destroy)
+        fm.add_command(label='Exit', command=self.on_close)
         m.add_cascade(label='File', menu=fm)
+        em = tk.Menu(m, tearoff=False)
+        em.add_command(label='Undo', accelerator='Ctrl+Z', command=self.undo)
+        em.add_command(label='Redo', accelerator='Ctrl+Y', command=self.redo)
+        m.add_cascade(label='Edit', menu=em)
         self.config(menu=m)
 
     def _bind_keys(self):
-        self.bind('<space>', lambda e: self.insert_rest())
+        self.bind('<space>', lambda e: self.toggle_play())   # DAW convention
+        self.bind('r', lambda e: self.insert_rest())
+        self.bind('<Insert>', lambda e: self.insert_rest())
         self.bind('<Escape>', lambda e: self.stop_sequence())
+        self.bind('<Control-z>', lambda e: self.undo())
+        self.bind('<Control-y>', lambda e: self.redo())
+        self.bind('<Control-Z>', lambda e: self.redo())      # Ctrl+Shift+Z
         self.bind('<Left>', lambda e: self.move_cursor(-1))
         self.bind('<Right>', lambda e: self.move_cursor(1))
         for idx, key in enumerate(PC_KEYS[:25]):
@@ -173,6 +194,83 @@ class MbseqStudio(tk.Tk):
 
     def mark_dirty(self):
         self.dirty = True
+
+    # --- Undo / redo --------------------------------------------------------
+    def _snapshot(self) -> dict[int, list[int | None]]:
+        return {k: list(v) for k, v in self.project.sequences.items()}
+
+    def push_undo(self):
+        """Capture the current state before a mutating edit."""
+        self._undo.append(self._snapshot())
+        if len(self._undo) > 100:
+            self._undo.pop(0)
+        self._redo.clear()
+
+    def undo(self):
+        if not self._undo:
+            return
+        self._redo.append(self._snapshot())
+        self.project.sequences = self._undo.pop()
+        self.mark_dirty()
+        self.refresh_all()
+
+    def redo(self):
+        if not self._redo:
+            return
+        self._undo.append(self._snapshot())
+        self.project.sequences = self._redo.pop()
+        self.mark_dirty()
+        self.refresh_all()
+
+    # --- Transpose ----------------------------------------------------------
+    def transpose_bank(self, semitones: int):
+        self.push_undo()
+        slot = int(self.slot.get())
+        self.project.sequences[slot] = transpose_steps(self.steps(), semitones)
+        self.mark_dirty()
+        self.refresh_grid(); self.refresh_keyboard(); self.refresh_raw()
+
+    # --- MIDI / WAV import & export ----------------------------------------
+    def import_midi_file(self):
+        p = filedialog.askopenfilename(filetypes=[('MIDI file','*.mid'),('All files','*.*')])
+        if not p: return
+        try:
+            steps = import_midi(p)
+        except Exception as e:
+            return messagebox.showerror('MIDI import failed', str(e))
+        if not steps:
+            return messagebox.showinfo('MIDI import', 'No notes found in that file.')
+        if len(steps) > MAX_STEPS:
+            messagebox.showinfo('MIDI import',
+                f'File has {len(steps)} steps; truncated to the MicroBrute limit of {MAX_STEPS}.')
+            steps = steps[:MAX_STEPS]
+        self.push_undo()
+        self.project.sequences[int(self.slot.get())] = steps
+        self.mark_dirty()
+        self.cursor.set(0); self.refresh_all()
+
+    def export_song_midi_file(self):
+        banks = [self.project.sequences[b] for b in range(1, 9)
+                 if any(n is not None for n in self.project.sequences.get(b, []))]
+        if not banks:
+            return messagebox.showinfo('Export song', 'All banks are empty.')
+        p = filedialog.asksaveasfilename(defaultextension='.mid',
+            filetypes=[('MIDI file','*.mid'),('All files','*.*')])
+        if not p: return
+        try:
+            export_song_midi(p, banks, bpm=self.tempo.get())
+        except Exception as e:
+            messagebox.showerror('Export song failed', str(e))
+
+    def export_bank_wav(self):
+        p = filedialog.asksaveasfilename(defaultextension='.wav',
+            filetypes=[('WAV audio','*.wav'),('All files','*.*')])
+        if not p: return
+        try:
+            render_steps_wav(p, self.steps(), bpm=self.tempo.get(),
+                             wave_shape=self.wave_shape.get(), volume=self.volume.get())
+        except Exception as e:
+            messagebox.showerror('WAV export failed', str(e))
 
     def on_close(self):
         self.stop_sequence()
@@ -238,9 +336,10 @@ class MbseqStudio(tk.Tk):
         self.preview_note(note)
         steps = self.steps()
         idx = self.cursor.get()
-        if idx >= len(steps):
-            if self._at_step_limit(): return
-            steps.append(note)
+        if idx >= len(steps) and self._at_step_limit():
+            return
+        self.push_undo()
+        if idx >= len(steps): steps.append(note)
         else: steps[idx] = note
         self.mark_dirty()
         self.move_cursor(1, refresh=False)
@@ -248,9 +347,10 @@ class MbseqStudio(tk.Tk):
 
     def insert_rest(self):
         steps = self.steps(); idx = self.cursor.get()
-        if idx >= len(steps):
-            if self._at_step_limit(): return
-            steps.append(None)
+        if idx >= len(steps) and self._at_step_limit():
+            return
+        self.push_undo()
+        if idx >= len(steps): steps.append(None)
         else: steps[idx] = None
         self.mark_dirty()
         self.move_cursor(1, refresh=False)
@@ -262,6 +362,7 @@ class MbseqStudio(tk.Tk):
         if n is not None: self.preview_note(n)
 
     def set_step_rest(self, idx:int):
+        self.push_undo()
         self.steps()[idx] = None; self.mark_dirty(); self.cursor.set(idx); self.refresh_grid(); self.refresh_raw()
 
     def move_cursor(self, delta:int, refresh=True):
@@ -273,12 +374,14 @@ class MbseqStudio(tk.Tk):
 
     def add_step(self):
         if self._at_step_limit(): return
+        self.push_undo()
         steps = self.steps(); idx = self.cursor.get()+1
         steps.insert(idx, None); self.mark_dirty(); self.cursor.set(idx); self.refresh_grid(); self.refresh_raw()
 
     def delete_step(self):
         steps = self.steps()
         if not steps: return
+        self.push_undo()
         steps.pop(self.cursor.get())
         if not steps: steps.append(None)
         self.mark_dirty()
@@ -287,6 +390,7 @@ class MbseqStudio(tk.Tk):
 
     def clear_slot(self):
         if messagebox.askyesno('Clear bank', f'Clear pattern bank {self.slot.get()}?'):
+            self.push_undo()
             self.project.sequences[int(self.slot.get())] = [None]*16
             self.mark_dirty()
             self.cursor.set(0); self.refresh_all()
@@ -307,6 +411,7 @@ class MbseqStudio(tk.Tk):
                 messagebox.showinfo('Duplicate bank', 'Source and target are the same bank.')
                 return
             if messagebox.askyesno('Overwrite bank', f'Overwrite bank {dst} with bank {src}?'):
+                self.push_undo()
                 self.project.sequences[dst] = list(self.project.sequences[src])
                 self.mark_dirty()
                 self.slot.set(dst)
@@ -323,6 +428,7 @@ class MbseqStudio(tk.Tk):
             self.project = MbseqProject.load(p)
             self.file_path = Path(p)
             self.dirty = False
+            self._undo.clear(); self._redo.clear()
             self.slot.set(1)
             self.cursor.set(0); self.refresh_all()
         except Exception as e:
@@ -343,6 +449,7 @@ class MbseqStudio(tk.Tk):
 
     def apply_raw(self):
         try:
+            self.push_undo()
             self.project = MbseqProject.parse(self.raw.get('1.0','end'))
             if int(self.slot.get()) not in self.project.sequences:
                 self.slot.set(1)
@@ -378,6 +485,12 @@ class MbseqStudio(tk.Tk):
             messagebox.showerror('Audio backend error', err)
         else:
             messagebox.showinfo('Audio backend', 'No audio error reported. If you still hear nothing, check Windows output device and app volume mixer.')
+
+    def toggle_play(self):
+        if self.playing:
+            self.stop_sequence()
+        else:
+            self.play_sequence()
 
     def play_sequence(self):
         self.stop_sequence()
