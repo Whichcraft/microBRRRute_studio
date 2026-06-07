@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.11.2] - 2026-06-07
+
+### Changed
+- Refined the roadmap in `TODO.md` to better respect the monophonic nature of
+  the MicroBrute hardware (removed "unison" in favor of "sub-oscillator").
+
 ## [0.11.1] - 2026-06-07
 
 ### Added

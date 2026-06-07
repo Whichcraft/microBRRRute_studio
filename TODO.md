@@ -6,7 +6,7 @@ Proposed improvements, roughly ordered by value. Done items move to
 ## Audio engine
 - [ ] MIDI Input support: play on a physical MIDI keyboard to record steps (needs
       external libraries like `mido`).
-- [ ] Multi-oscillator layering or Unison mode.
+- [ ] **Sub-oscillator / Overtone** mix control for the synth.
 
 ## Editing & workflow
 - [ ] Drag-and-drop `.mbseq` files onto the window to open (requires external lib
