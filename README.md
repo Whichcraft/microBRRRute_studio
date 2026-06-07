@@ -17,8 +17,11 @@ single-file **Windows `.exe`** with PyInstaller.
 
 ## ⬇️ Download
 
-Prebuilt standalone executables for **Windows** and **Linux** are attached to
-each release — no Python install required:
+Prebuilt standalone executables for **Windows**, **Linux**, and **macOS** are
+attached to each release — no Python install required.
+
+*(Note: macOS binaries are provided by CI but are currently untested as I have
+no Mac. Feedback is very welcome!)*
 
 **[→ Latest release](https://github.com/Whichcraft/microBRRRute_studio/releases/latest)**
 
@@ -69,7 +72,7 @@ python main.py
 **Windows** — Tkinter ships with the python.org installer; or just double-click
 `run_from_source.bat`.
 
-**macOS** — `brew install python-tk` if Tkinter is missing.
+**macOS** — `brew install python-tk` if Tkinter is missing. (Note: macOS version is currently untested, as I have no Mac. Feel free to test and send me your feedback, you're very welcome!)
 
 **Linux** — Tkinter is a separate package and audio playback uses `aplay` or
 `paplay`:

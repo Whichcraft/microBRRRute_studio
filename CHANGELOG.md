@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.5.8] - 2026-06-07
+
+### Changed
+- Updated README with a disclaimer that macOS builds are currently untested and
+  welcome feedback from Mac users.
+
 ## [0.5.7] - 2026-06-07
 
 ### Removed
