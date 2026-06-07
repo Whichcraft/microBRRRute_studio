@@ -1,7 +1,13 @@
 """Headless tests for the data layer (no tkinter / no audio device needed)."""
 import wave
 
-from microbrrrute_studio.mbseq import MbseqProject, midi_to_name, name_to_midi, transpose_steps
+from microbrrrute_studio.mbseq import (
+    MbseqProject,
+    Step,
+    midi_to_name,
+    name_to_midi,
+    transpose_steps,
+)
 from microbrrrute_studio.midi_export import export_midi, export_song_midi, import_midi, vlq
 from microbrrrute_studio.synth import make_wave, midi_freq, render_steps_wav
 
@@ -12,9 +18,9 @@ def test_parse_roundtrip():
     # banks 1..8 always present after parse
     assert set(proj.sequences) == set(range(1, 9))
     # now padded to 64
-    assert proj.sequences[1][:5] == [53, 53, 55, None, 60]
+    assert [step.note for step in proj.sequences[1][:5]] == [53, 53, 55, None, 60]
     assert len(proj.sequences[1]) == 64
-    assert proj.sequences[2][:4] == [60, 60, None, 64]
+    assert [step.note for step in proj.sequences[2][:4]] == [60, 60, None, 64]
     assert len(proj.sequences[2]) == 64
     # serialize -> parse is stable
     assert MbseqProject.parse(proj.serialize()).sequences == proj.sequences
@@ -23,16 +29,20 @@ def test_parse_roundtrip():
 def test_empty_has_eight_banks():
     proj = MbseqProject.empty()
     assert set(proj.sequences) == set(range(1, 9))
-    assert all(steps == [None] * 64 for steps in proj.sequences.values())
+    assert all(
+        [step.note for step in steps] == [None] * 64
+        for steps in proj.sequences.values()
+    )
 
 
 def test_serialize_always_writes_eight_banks():
     proj = MbseqProject.parse("1:60\n")
     lines = proj.serialize().strip().splitlines()
-    assert len(lines) == 8
-    assert lines[0].startswith("1:60")
+    bank_lines = [line for line in lines if not line.startswith("#")]
+    assert len(lines) == 16
+    assert bank_lines[0].startswith("1:60")
     # check it padded bank 1 to 64 steps
-    assert len(lines[0].split(":")[1].split()) == 64
+    assert len(bank_lines[0].split(":")[1].split()) == 64
 
 
 def test_parse_rejects_bad_note():
@@ -99,9 +109,14 @@ def test_midi_freq_a4():
 
 
 def test_transpose_clamps_and_keeps_rests():
-    assert transpose_steps([60, None, 62], 2) == [62, None, 64]
-    assert transpose_steps([0, 127], -5) == [0, 122]      # low clamp
-    assert transpose_steps([120, 127], 12) == [127, 127]  # high clamp
+    steps = [Step(60), Step(None), Step(62, accent=True)]
+    result = transpose_steps(steps, 2)
+    assert [step.note for step in result] == [62, None, 64]
+    assert result[2].accent
+    low = transpose_steps([Step(0), Step(127)], -5)
+    high = transpose_steps([Step(120), Step(127)], 12)
+    assert [step.note for step in low] == [0, 122]
+    assert [step.note for step in high] == [127, 127]
 
 
 def test_midi_roundtrip(tmp_path):
@@ -130,7 +145,13 @@ def test_export_song_concatenates(tmp_path):
 
 def test_render_steps_wav(tmp_path):
     p = tmp_path / "bounce.wav"
-    render_steps_wav(p, [60, None, 64], bpm=120, wave_shape="saw", volume=0.4)
+    render_steps_wav(
+        p,
+        [Step(60), Step(None), Step(64, gate=0.5)],
+        bpm=120,
+        wave_shape="saw",
+        volume=0.4,
+    )
     with wave.open(str(p)) as w:
         # 3 steps * (eighth note at 120bpm = 0.25s) * 44100 frames
         assert abs(w.getnframes() - int(3 * 0.25 * 44100)) <= 3

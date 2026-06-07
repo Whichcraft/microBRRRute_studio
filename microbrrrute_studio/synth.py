@@ -165,7 +165,6 @@ def render_steps_wav(path: Path | str, steps: list[Step], bpm: int = 120,
     """
     step_secs = 60.0 / max(1, bpm) / 2
     step_frames = max(1, int(step_secs * sample_rate))
-    note_frames = max(1, int(step_frames * gate))
     amp = int(32767 * max(0.0, min(volume, 1.0)))
     attack = max(1, int(0.008 * sample_rate))
     release = max(1, int(0.035 * sample_rate))
@@ -173,12 +172,16 @@ def render_steps_wav(path: Path | str, steps: list[Step], bpm: int = 120,
         w.setnchannels(1)
         w.setsampwidth(2)
         w.setframerate(sample_rate)
-        for note in steps:
+        for step in steps:
             frames = bytearray()
-            if note is None:
+            if step.note is None:
                 frames += b'\x00\x00' * step_frames
             else:
-                freq = midi_freq(note)
+                note_frames = max(
+                    1,
+                    int(step_frames * max(0.0, min(step.gate, 1.0))),
+                )
+                freq = midi_freq(step.note)
                 for i in range(step_frames):
                     if i >= note_frames:
                         frames += b'\x00\x00'

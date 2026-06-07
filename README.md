@@ -36,9 +36,12 @@ Every version bump merged to `main` is built and published automatically by CI.
 ## ✨ Features
 
 - **Visual Piano Roll Editor.** An interactive canvas for viewing and editing
-  patterns across the full MicroBrute range (C0–C8). **Zoom and pan** to
-  navigate complex patterns; click anywhere to place a note. Syncs perfectly
-  with the step grid and playhead.
+  patterns across the full MicroBrute range (C0–C8). Switch between
+  **horizontal and vertical layouts**, use numbered step indicators, and
+  **zoom and pan** to navigate complex patterns. Click anywhere to place a
+  note or drag across notes to select them. The integrated piano keyboard
+  highlights cursor, selection, and playback notes, and the view stays
+  synchronized with the step grid and playhead.
 - **Musical Pattern Randomizer.** Generate coherent sequences within specific
   scales (Major, Minor, Pentatonic, Blues, etc.). Control root note, octave
   range, and density.
@@ -101,8 +104,14 @@ Every version bump merged to `main` is built and published automatically by CI.
 | `Ctrl+Shift+V` | Paste entire pattern bank |
 | `Ctrl + N` | Rename current bank |
 | `Ctrl + R` | Open Pattern Randomizer |
-| `Ctrl + Wheel`| Zoom Piano Roll |
+| `Ctrl + Wheel` | Zoom Piano Roll vertically |
+| `Ctrl + Shift + Wheel` | Zoom Piano Roll horizontally |
+| `Shift + Wheel` | Pan Piano Roll horizontally |
 | `MouseWheel` | Pan Piano Roll vertically |
+
+The **Horizontal / Vertical** controls above the Piano Roll transpose the
+editor layout. Horizontal mode places time left-to-right; Vertical mode places
+time top-to-bottom. The chosen orientation is saved in app settings.
 
 ---
 
@@ -153,8 +162,9 @@ automatically prunes old versions to keep only the **latest** release active.
 
 ## 🧪 Tests
 
-The data layer (parsing, serialization, MIDI export, waveform generation) is
-covered by headless tests that need no display or audio device:
+Parsing, serialization, MIDI export, waveform generation, and Piano Roll
+coordinate logic are covered by headless tests that need no display or audio
+device:
 
 ```bash
 pip install -e ".[dev]"
@@ -190,7 +200,7 @@ microbrrrute_studio/
   synth.py        Software synth + cross-platform, stoppable playback engine
   mbseq.py        .mbseq parse / serialize, MIDI note-name helpers
   midi_export.py  Standard MIDI File writer
-tests/            Headless data-layer tests
+tests/            Headless data-layer and Piano Roll logic tests
 main.py           Entry point
 ```
 

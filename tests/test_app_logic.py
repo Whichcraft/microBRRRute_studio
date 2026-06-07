@@ -1,0 +1,37 @@
+from types import SimpleNamespace
+
+from microbrrrute_studio.app import MbseqStudio
+
+
+def test_piano_roll_position_accounts_for_keyboard_zoom_and_pan():
+    studio = SimpleNamespace(
+        piano_roll_orientation=SimpleNamespace(get=lambda: "horizontal"),
+        _piano_roll_off_x=-120.0,
+        _piano_roll_off_y=30.0,
+        _piano_roll_metrics=lambda: (
+            700.0, 240.0, 60.0, 640.0, 240.0, 20.0, 10.0
+        ),
+    )
+
+    assert MbseqStudio._piano_roll_position(studio, 60.0, 230.0) == (6, 15)
+    assert MbseqStudio._piano_roll_position(studio, 59.0, 230.0)[0] == 5
+
+
+def test_vertical_piano_roll_position_swaps_time_and_pitch_axes():
+    studio = SimpleNamespace(
+        piano_roll_orientation=SimpleNamespace(get=lambda: "vertical"),
+        _piano_roll_off_x=-20.0,
+        _piano_roll_off_y=-40.0,
+        _piano_roll_metrics=lambda: (
+            700.0, 500.0, 50.0, 700.0, 450.0, 15.0, 10.0
+        ),
+    )
+
+    assert MbseqStudio._piano_roll_position(studio, 30.0, 70.0) == (4, 17)
+
+
+def test_wheel_direction_supports_linux_and_windows_events():
+    assert MbseqStudio._wheel_up(SimpleNamespace(num=4, delta=0))
+    assert not MbseqStudio._wheel_up(SimpleNamespace(num=5, delta=0))
+    assert MbseqStudio._wheel_up(SimpleNamespace(num=None, delta=120))
+    assert not MbseqStudio._wheel_up(SimpleNamespace(num=None, delta=-120))

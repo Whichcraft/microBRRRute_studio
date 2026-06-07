@@ -13,11 +13,6 @@ Proposed improvements, roughly ordered by value. Done items move to
       for reliable cross-platform support).
 - [ ] Scale-quantize for free-hand Piano Roll editing.
 
-## UI / UX
-- [ ] Visual piano roll editor: horizontal zoom support.
-- [ ] Selection tools for the Piano Roll (drag-to-select).
-- [ ] Piano Roll keyboard highlighting (visual connection to the grid).
-
 ## Hardware verification
 - [ ] Test arpeggiator-generated patterns on actual MicroBrute SE hardware to
       verify playback consistency.

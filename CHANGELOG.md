@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.12.0] - 2026-06-07
+
+### Added
+- Independent horizontal Piano Roll zoom and pan controls.
+- A Horizontal/Vertical Piano Roll orientation switch with numbered step
+  indicators in both layouts.
+- Drag-to-select in the Piano Roll, with additive and toggle modifiers.
+- An integrated Piano Roll keyboard that highlights cursor, selection, and
+  playback notes.
+
+### Fixed
+- Restored missing editor methods and MIDI export handlers that prevented the
+  application from starting or completing menu actions.
+- Fixed WAV bank export after the migration to expressive `Step` objects.
+- Fixed the initial Piano Roll layout so the canvas receives visible space when
+  the application starts.
+
 ## [0.11.5] - 2026-06-07
 
 ### Changed

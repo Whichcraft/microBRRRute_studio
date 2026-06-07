@@ -3,6 +3,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from pathlib import Path
 import json
+import math
 import uuid
 import tempfile
 import sys
@@ -84,6 +85,7 @@ class MbseqStudio(tk.Tk):
         self.count_in = tk.BooleanVar(value=False)
         self.dark_mode = tk.BooleanVar(value=False)
         self.step_res = tk.StringVar(value='1/8')
+        self.piano_roll_orientation = tk.StringVar(value='horizontal')
         self.bank_length = tk.IntVar(value=MAX_STEPS)
         self.attack = tk.DoubleVar(value=0.005)
         self.decay = tk.DoubleVar(value=0.1)
@@ -103,9 +105,14 @@ class MbseqStudio(tk.Tk):
         self._drag_idx: int | None = None
         self._selection: set[int] = set()
         self._piano_roll_zoom = 1.0
+        self._piano_roll_zoom_x = 1.0
+        self._piano_roll_off_x = 0.0
         self._piano_roll_off_y = 0
-        
+        self._piano_roll_drag_start: tuple[float, float] | None = None
+        self._piano_roll_drag_current: tuple[float, float] | None = None
+        self._piano_roll_drag_state = 0
         self.step_buttons: list[tk.Button] = []
+
         self.key_rects: dict[int, int] = {}
         self.recent_files = self._load_recent()
         self.play_btn: ttk.Button | None = None
@@ -230,11 +237,36 @@ class MbseqStudio(tk.Tk):
         self.grid_inner.pack(anchor='nw')
         self.bind('<Configure>', lambda e: self.on_resize(e))
 
-        self.piano_roll_frame = ttk.LabelFrame(self.paned, text='Visual Piano Roll (Ctrl+Scroll = Zoom, Scroll = Pan)', padding=6)
+        self.piano_roll_frame = ttk.LabelFrame(
+            self.paned, text='Visual Piano Roll', padding=6
+        )
         self.paned.add(self.piano_roll_frame, weight=2)
-        self.piano_roll = tk.Canvas(self.piano_roll_frame, bg='#333333', highlightthickness=0)
+        piano_roll_toolbar = ttk.Frame(self.piano_roll_frame)
+        piano_roll_toolbar.pack(fill='x', pady=(0, 4))
+        ttk.Label(piano_roll_toolbar, text='Orientation').pack(side='left')
+        for label, value in [('Horizontal', 'horizontal'), ('Vertical', 'vertical')]:
+            ttk.Radiobutton(
+                piano_roll_toolbar,
+                text=label,
+                value=value,
+                variable=self.piano_roll_orientation,
+                command=self._change_piano_roll_orientation,
+            ).pack(side='left', padx=(6, 0))
+        ttk.Label(
+            piano_roll_toolbar,
+            text='Ctrl+Wheel: vertical zoom | Ctrl+Shift+Wheel: horizontal zoom',
+        ).pack(side='right')
+        self.piano_roll = tk.Canvas(
+            self.piano_roll_frame,
+            height=280,
+            bg='#333333',
+            highlightthickness=0,
+        )
         self.piano_roll.pack(fill='both', expand=True)
-        self.piano_roll.bind('<Button-1>', self._on_piano_roll_click)
+        self.piano_roll.bind('<ButtonPress-1>', self._on_piano_roll_press)
+        self.piano_roll.bind('<B1-Motion>', self._on_piano_roll_drag)
+        self.piano_roll.bind('<ButtonRelease-1>', self._on_piano_roll_release)
+        self.after_idle(self._set_initial_piano_roll_size)
 
         kb_wrap = ttk.Frame(self, padding=8)
         kb_wrap.pack(fill='x')
@@ -329,6 +361,16 @@ class MbseqStudio(tk.Tk):
             self.project.sequences[s] = [Step() for _ in range(MAX_STEPS)]
         return self.project.sequences[s]
 
+    def note_for_index(self, idx: int) -> int:
+        return max(0, min(127, self.root_note + self.octave_shift.get() * 12 + idx))
+
+    def _set_initial_piano_roll_size(self) -> None:
+        height = self.paned.winfo_height()
+        if height <= 1:
+            self.after(50, self._set_initial_piano_roll_size)
+            return
+        self.paned.sashpos(0, max(250, height // 2))
+
     def focus_bank_name(self) -> None:
         if hasattr(self, 'name_entry'):
             self.name_entry.focus_set()
@@ -385,7 +427,14 @@ class MbseqStudio(tk.Tk):
 
     def _save_settings(self) -> None:
         try:
-            d = {k: getattr(self, k).get() for k in ['volume', 'tempo', 'dark_mode', 'wave_shape', 'step_res', 'attack', 'decay', 'sustain', 'release']}
+            d = {
+                k: getattr(self, k).get()
+                for k in [
+                    'volume', 'tempo', 'dark_mode', 'wave_shape', 'step_res',
+                    'piano_roll_orientation', 'attack', 'decay', 'sustain',
+                    'release',
+                ]
+            }
             self._settings_path().write_text(json.dumps(d), encoding='utf-8')
         except Exception: pass
 
@@ -582,8 +631,43 @@ class MbseqStudio(tk.Tk):
             self.mark_dirty(); self.cursor.set(0); self.refresh_all()
         except Exception as e: messagebox.showerror('Error', str(e))
 
+    def export_midi_file(self) -> None:
+        p = filedialog.asksaveasfilename(
+            defaultextension='.mid',
+            filetypes=[('MIDI file', '*.mid'), ('All files', '*.*')],
+        )
+        if not p:
+            return
+        try:
+            export_midi(p, [step.note for step in self.steps()], bpm=self.tempo.get())
+        except Exception as e:
+            messagebox.showerror('MIDI export failed', str(e))
+
+    def export_all_midi_files(self) -> None:
+        folder = filedialog.askdirectory(title='Choose folder for 8 MIDI bank exports')
+        if not folder:
+            return
+        try:
+            base = self.file_path.stem if self.file_path else 'mbseq'
+            out = Path(folder)
+            for bank in range(1, 9):
+                steps = self.project.sequences.get(bank, [Step() for _ in range(MAX_STEPS)])
+                export_midi(
+                    out / f'{base}_bank_{bank}.mid',
+                    [step.note for step in steps],
+                    bpm=self.tempo.get(),
+                )
+            messagebox.showinfo('Export complete', f'Exported 8 MIDI files to:\n{folder}')
+        except Exception as e:
+            messagebox.showerror('MIDI export failed', str(e))
+
     def export_song_midi_file(self) -> None:
-        banks = {b: [s.note for s in self.project.sequences[b]] for b in range(1, 9) if b in self.project.sequences and any(s.note is not None for s in self.project.sequences[b])}
+        banks = [
+            [s.note for s in self.project.sequences[b]]
+            for b in range(1, 9)
+            if b in self.project.sequences
+            and any(s.note is not None for s in self.project.sequences[b])
+        ]
         if not banks: return
         p = filedialog.asksaveasfilename(defaultextension='.mid', filetypes=[('MIDI file','*.mid')])
         if p:
@@ -631,42 +715,366 @@ class MbseqStudio(tk.Tk):
             self.step_buttons[i].config(text=txt, bg=bg, fg=fg, highlightthickness=2 if i in self._selection else 0, command=lambda x=i: self.select_step(x))
         self.refresh_status()
 
-    def _on_piano_roll_scroll(self, event: tk.Event) -> None:
-        if event.state & 0x0004:
-            if event.num == 4 or event.delta > 0: self._piano_roll_zoom *= 1.1
-            else: self._piano_roll_zoom /= 1.1
-            self._piano_roll_zoom = max(0.5, min(5.0, self._piano_roll_zoom))
-            self.refresh_piano_roll()
+    def _change_piano_roll_orientation(self) -> None:
+        self._piano_roll_off_x = 0.0
+        self._piano_roll_off_y = 0
+        self._piano_roll_drag_start = None
+        self._piano_roll_drag_current = None
+        self._save_settings()
+        self.refresh_piano_roll()
+
+    def _piano_roll_metrics(
+        self,
+    ) -> tuple[float, float, float, float, float, float, float]:
+        w = float(self.piano_roll.winfo_width())
+        h = float(self.piano_roll.winfo_height())
+        steps = self.steps()
+        if self.piano_roll_orientation.get() == 'vertical':
+            keyboard_size = 50.0
+            draw_w = max(1.0, w)
+            draw_h = max(1.0, h - keyboard_size)
+            step_size = draw_h / max(1, len(steps)) * self._piano_roll_zoom
+            note_size = draw_w / 24 * self._piano_roll_zoom_x
         else:
-            if event.num == 4 or event.delta > 0: self._piano_roll_off_y += 30
-            else: self._piano_roll_off_y -= 30
-            self.refresh_piano_roll()
+            keyboard_size = 60.0
+            draw_w = max(1.0, w - keyboard_size)
+            draw_h = max(1.0, h)
+            step_size = draw_w / max(1, len(steps)) * self._piano_roll_zoom_x
+            note_size = draw_h / 24 * self._piano_roll_zoom
+        return w, h, keyboard_size, draw_w, draw_h, step_size, note_size
+
+    def _clamp_piano_roll_x(self) -> None:
+        _, _, _, draw_w, _, step_size, note_size = self._piano_roll_metrics()
+        if self.piano_roll_orientation.get() == 'vertical':
+            content_w = note_size * (MAX_PLAYABLE - MIN_PLAYABLE + 1)
+        else:
+            content_w = step_size * len(self.steps())
+        self._piano_roll_off_x = min(
+            0.0,
+            max(min(0.0, draw_w - content_w), self._piano_roll_off_x),
+        )
+
+    @staticmethod
+    def _wheel_up(event: tk.Event) -> bool:
+        return getattr(event, 'num', None) == 4 or getattr(event, 'delta', 0) > 0
+
+    def _on_piano_roll_scroll(self, event: tk.Event) -> None:
+        wheel_up = self._wheel_up(event)
+        ctrl = bool(event.state & 0x0004)
+        shift = bool(event.state & 0x0001)
+        if ctrl and shift:
+            factor = 1.1 if wheel_up else 1 / 1.1
+            self._piano_roll_zoom_x = max(
+                1.0,
+                min(10.0, self._piano_roll_zoom_x * factor),
+            )
+            self._clamp_piano_roll_x()
+        elif ctrl:
+            factor = 1.1 if wheel_up else 1 / 1.1
+            self._piano_roll_zoom = max(
+                0.5,
+                min(5.0, self._piano_roll_zoom * factor),
+            )
+        elif shift:
+            self._piano_roll_off_x += 60 if wheel_up else -60
+            self._clamp_piano_roll_x()
+        else:
+            self._piano_roll_off_y += 30 if wheel_up else -30
+        self.refresh_piano_roll()
 
     def refresh_piano_roll(self) -> None:
         self.piano_roll.delete('all')
-        w, h = self.piano_roll.winfo_width(), self.piano_roll.winfo_height()
-        if w < 10: return
-        steps = self.steps(); zoom = self._piano_roll_zoom; cell_w = (w / len(steps)) * zoom; cell_h = (h / 24) * zoom; off_y = self._piano_roll_off_y
-        for n in range(MIN_PLAYABLE, MAX_PLAYABLE + 1):
-            y = h - (n - MIN_PLAYABLE + 1) * cell_h + off_y
-            if -cell_h < y < h + cell_h:
-                self.piano_roll.create_rectangle(0, y, w, y + cell_h, fill=('#2a2a2a' if (n % 12) in [1, 3, 6, 8, 10] else '#333333'), outline='#222222')
-                if n % 12 == 0: self.piano_roll.create_text(25, y + cell_h/2, text=f'C{n//12 - 1}', fill='#888888', font=('Consolas', int(8*zoom)))
-        for i, s in enumerate(steps):
-            x = i * cell_w
-            if -cell_w < x < w:
-                if i == self._playhead: self.piano_roll.create_rectangle(x, 0, x + cell_w, h, fill='#7CFC8A', stipple='gray25', outline='')
-                if s.note is not None:
-                    y = h - (s.note - MIN_PLAYABLE + 1) * cell_h + off_y
-                    if -cell_h < y < h:
-                        col = '#0078d7' if i == self.cursor.get() else ('#ffffff' if s.accent else '#ffcc00')
-                        self.piano_roll.create_rectangle(x+1, y+1, x+cell_w-1, y+cell_h-1, fill=col, outline='white' if s.slide else '')
+        w, h, keyboard_size, _, _, step_size, note_size = (
+            self._piano_roll_metrics()
+        )
+        if w < 10 or h < 10:
+            return
+        steps = self.steps()
+        off_x = self._piano_roll_off_x
+        off_y = self._piano_roll_off_y
+        cursor_note = None
+        if 0 <= self.cursor.get() < len(steps):
+            cursor_note = steps[self.cursor.get()].note
+        selected_notes = {
+            steps[i].note
+            for i in self._selection
+            if 0 <= i < len(steps) and steps[i].note is not None
+        }
+        playing_note = None
+        if self.playing and 0 <= self._playhead < len(steps):
+            playing_note = steps[self._playhead].note
+        if self.piano_roll_orientation.get() == 'vertical':
+            self._draw_vertical_piano_roll(
+                w, h, keyboard_size, step_size, note_size, steps,
+                cursor_note, selected_notes, playing_note,
+            )
+        else:
+            self._draw_horizontal_piano_roll(
+                w, h, keyboard_size, step_size, note_size, steps,
+                cursor_note, selected_notes, playing_note,
+            )
+        if self._piano_roll_drag_start and self._piano_roll_drag_current:
+            x1, y1 = self._piano_roll_drag_start
+            x2, y2 = self._piano_roll_drag_current
+            self.piano_roll.create_rectangle(
+                x1, y1, x2, y2,
+                outline='#7CFC8A', width=2, dash=(4, 2), tags='selection_box',
+            )
+
+    @staticmethod
+    def _piano_key_colors(
+        note: int,
+        cursor_note: int | None,
+        selected_notes: set[int],
+        playing_note: int | None,
+    ) -> tuple[str, str]:
+        if note == playing_note:
+            bg = '#7CFC8A'
+        elif note == cursor_note:
+            bg = '#0078d7'
+        elif note in selected_notes:
+            bg = '#ffa500'
+        else:
+            bg = '#000000' if note % 12 in [1, 3, 6, 8, 10] else '#ffffff'
+        fg = '#ffffff' if bg in ('#000000', '#0078d7') else '#000000'
+        return bg, fg
+
+    def _draw_horizontal_piano_roll(
+        self,
+        w: float,
+        h: float,
+        keyboard_w: float,
+        step_w: float,
+        note_h: float,
+        steps: list[Step],
+        cursor_note: int | None,
+        selected_notes: set[int],
+        playing_note: int | None,
+    ) -> None:
+        for note in range(MIN_PLAYABLE, MAX_PLAYABLE + 1):
+            y = h - (note - MIN_PLAYABLE + 1) * note_h + self._piano_roll_off_y
+            if -note_h < y < h + note_h:
+                fill = '#2a2a2a' if note % 12 in [1, 3, 6, 8, 10] else '#333333'
+                self.piano_roll.create_rectangle(
+                    keyboard_w, y, w, y + note_h, fill=fill, outline='#222222'
+                )
+        for i, step in enumerate(steps):
+            x = keyboard_w + self._piano_roll_off_x + i * step_w
+            if keyboard_w - step_w < x < w:
+                if i == self._playhead:
+                    self.piano_roll.create_rectangle(
+                        x, 0, x + step_w, h,
+                        fill='#7CFC8A', stipple='gray25', outline='',
+                    )
+                if step.note is not None:
+                    y = h - (step.note - MIN_PLAYABLE + 1) * note_h + self._piano_roll_off_y
+                    self._draw_piano_roll_note(i, step, x, y, step_w, note_h)
+                self._draw_step_indicator(i, x, 0, step_w, 18, vertical=False)
+        for note in range(MIN_PLAYABLE, MAX_PLAYABLE + 1):
+            y = h - (note - MIN_PLAYABLE + 1) * note_h + self._piano_roll_off_y
+            if -note_h < y < h + note_h:
+                bg, fg = self._piano_key_colors(
+                    note, cursor_note, selected_notes, playing_note
+                )
+                self.piano_roll.create_rectangle(
+                    0, y, keyboard_w, y + note_h, fill=bg, outline='#888888'
+                )
+                if note % 12 == 0 or note in (playing_note, cursor_note):
+                    self.piano_roll.create_text(
+                        keyboard_w / 2, y + note_h / 2,
+                        text=midi_to_name(note), fill=fg,
+                        font=('Consolas', max(6, int(8 * self._piano_roll_zoom))),
+                    )
+        self.piano_roll.create_line(keyboard_w, 0, keyboard_w, h, fill='#aaaaaa')
+
+    def _draw_vertical_piano_roll(
+        self,
+        w: float,
+        h: float,
+        keyboard_h: float,
+        step_h: float,
+        note_w: float,
+        steps: list[Step],
+        cursor_note: int | None,
+        selected_notes: set[int],
+        playing_note: int | None,
+    ) -> None:
+        for note in range(MIN_PLAYABLE, MAX_PLAYABLE + 1):
+            x = (note - MIN_PLAYABLE) * note_w + self._piano_roll_off_x
+            if -note_w < x < w + note_w:
+                fill = '#2a2a2a' if note % 12 in [1, 3, 6, 8, 10] else '#333333'
+                self.piano_roll.create_rectangle(
+                    x, keyboard_h, x + note_w, h, fill=fill, outline='#222222'
+                )
+        for i, step in enumerate(steps):
+            y = keyboard_h + self._piano_roll_off_y + i * step_h
+            if keyboard_h - step_h < y < h:
+                if i == self._playhead:
+                    self.piano_roll.create_rectangle(
+                        0, y, w, y + step_h,
+                        fill='#7CFC8A', stipple='gray25', outline='',
+                    )
+                if step.note is not None:
+                    x = (step.note - MIN_PLAYABLE) * note_w + self._piano_roll_off_x
+                    self._draw_piano_roll_note(i, step, x, y, note_w, step_h)
+                self._draw_step_indicator(i, 0, y, 34, step_h, vertical=True)
+        for note in range(MIN_PLAYABLE, MAX_PLAYABLE + 1):
+            x = (note - MIN_PLAYABLE) * note_w + self._piano_roll_off_x
+            if -note_w < x < w + note_w:
+                bg, fg = self._piano_key_colors(
+                    note, cursor_note, selected_notes, playing_note
+                )
+                self.piano_roll.create_rectangle(
+                    x, 0, x + note_w, keyboard_h, fill=bg, outline='#888888'
+                )
+                if note % 12 == 0 or note in (playing_note, cursor_note):
+                    self.piano_roll.create_text(
+                        x + note_w / 2, keyboard_h / 2,
+                        text=midi_to_name(note), fill=fg, angle=90,
+                        font=('Consolas', max(6, int(8 * self._piano_roll_zoom_x))),
+                    )
+        self.piano_roll.create_line(0, keyboard_h, w, keyboard_h, fill='#aaaaaa')
+
+    def _draw_step_indicator(
+        self,
+        idx: int,
+        x: float,
+        y: float,
+        width: float,
+        height: float,
+        *,
+        vertical: bool,
+    ) -> None:
+        if idx == self._playhead:
+            fill, fg = '#7CFC8A', '#000000'
+        elif idx == self.cursor.get():
+            fill, fg = '#0078d7', '#ffffff'
+        elif idx in self._selection:
+            fill, fg = '#ffa500', '#000000'
+        else:
+            fill, fg = '#202020', '#cccccc'
+        if vertical:
+            self.piano_roll.create_rectangle(
+                x, y, x + width, y + height, fill=fill, outline='#555555'
+            )
+            if height >= 9 or idx % 4 == 0:
+                self.piano_roll.create_text(
+                    x + width / 2, y + height / 2,
+                    text=str(idx + 1), fill=fg, font=('Consolas', 7),
+                )
+            self.piano_roll.create_line(0, y, self.piano_roll.winfo_width(), y, fill='#444444')
+        else:
+            self.piano_roll.create_rectangle(
+                x, y, x + width, y + height, fill=fill, outline='#555555'
+            )
+            if width >= 14 or idx % 4 == 0:
+                self.piano_roll.create_text(
+                    x + width / 2, y + height / 2,
+                    text=str(idx + 1), fill=fg, font=('Consolas', 7),
+                )
+            self.piano_roll.create_line(x, 0, x, self.piano_roll.winfo_height(), fill='#444444')
+
+    def _draw_piano_roll_note(
+        self,
+        idx: int,
+        step: Step,
+        x: float,
+        y: float,
+        width: float,
+        height: float,
+    ) -> None:
+        if idx in self._selection:
+            color = '#ffa500'
+        elif idx == self.cursor.get():
+            color = '#0078d7'
+        else:
+            color = '#ffffff' if step.accent else '#ffcc00'
+        outline = '#ffffff' if step.slide else '#ffa500' if idx in self._selection else ''
+        self.piano_roll.create_rectangle(
+            x + 1, y + 1, x + width - 1, y + height - 1,
+            fill=color, outline=outline,
+        )
+
+    def _piano_roll_position(self, x: float, y: float) -> tuple[int, int]:
+        _, h, keyboard_size, _, _, step_size, note_size = (
+            self._piano_roll_metrics()
+        )
+        if self.piano_roll_orientation.get() == 'vertical':
+            step_idx = math.floor(
+                (y - keyboard_size - self._piano_roll_off_y) / step_size
+            )
+            note_val = (
+                math.floor((x - self._piano_roll_off_x) / note_size)
+                + MIN_PLAYABLE
+            )
+        else:
+            step_idx = math.floor(
+                (x - keyboard_size - self._piano_roll_off_x) / step_size
+            )
+            note_val = math.floor(
+                (h + self._piano_roll_off_y - y) / note_size
+                + MIN_PLAYABLE - 1
+            )
+        return step_idx, note_val
+
+    def _on_piano_roll_press(self, event: tk.Event) -> None:
+        _, _, keyboard_size, _, _, _, _ = self._piano_roll_metrics()
+        on_keyboard = (
+            event.y < keyboard_size
+            if self.piano_roll_orientation.get() == 'vertical'
+            else event.x < keyboard_size
+        )
+        if on_keyboard:
+            _, note_val = self._piano_roll_position(event.x, event.y)
+            if MIN_PLAYABLE <= note_val <= MAX_PLAYABLE:
+                self.preview_note(note_val)
+            self._piano_roll_drag_start = None
+            return
+        self._piano_roll_drag_start = (event.x, event.y)
+        self._piano_roll_drag_current = (event.x, event.y)
+        self._piano_roll_drag_state = event.state
+
+    def _on_piano_roll_drag(self, event: tk.Event) -> None:
+        if self._piano_roll_drag_start is None:
+            return
+        self._piano_roll_drag_current = (event.x, event.y)
+        self.refresh_piano_roll()
+
+    def _on_piano_roll_release(self, event: tk.Event) -> None:
+        if self._piano_roll_drag_start is None:
+            return
+        start_x, start_y = self._piano_roll_drag_start
+        dragged = abs(event.x - start_x) >= 4 or abs(event.y - start_y) >= 4
+        if dragged:
+            start_step, start_note = self._piano_roll_position(start_x, start_y)
+            end_step, end_note = self._piano_roll_position(event.x, event.y)
+            first_step, last_step = sorted((start_step, end_step))
+            low_note, high_note = sorted((start_note, end_note))
+            matched = {
+                i
+                for i, step in enumerate(self.steps())
+                if first_step <= i <= last_step
+                and step.note is not None
+                and low_note <= step.note <= high_note
+            }
+            if self._piano_roll_drag_state & (0x0004 | 0x20000):
+                self._selection.symmetric_difference_update(matched)
+            elif self._piano_roll_drag_state & 0x0001:
+                self._selection.update(matched)
+            else:
+                self._selection = matched
+            if matched:
+                self.cursor.set(min(matched))
+            self.refresh_grid()
+        else:
+            self._on_piano_roll_click(event)
+        self._piano_roll_drag_start = None
+        self._piano_roll_drag_current = None
+        self.refresh_piano_roll()
 
     def _on_piano_roll_click(self, event: tk.Event) -> None:
-        w, h = self.piano_roll.winfo_width(), self.piano_roll.winfo_height(); steps = self.steps()
-        zoom = self._piano_roll_zoom; cell_w = (w / len(steps)) * zoom; cell_h = (h / 24) * zoom; off_y = self._piano_roll_off_y
-        step_idx = int(event.x / cell_w)
-        note_val = int((h + off_y - event.y) / cell_h + MIN_PLAYABLE - 1)
+        steps = self.steps()
+        step_idx, note_val = self._piano_roll_position(event.x, event.y)
         if 0 <= step_idx < len(steps) and MIN_PLAYABLE <= note_val <= MAX_PLAYABLE:
             self.select_step(step_idx)
             self.push_undo(); steps[step_idx].note = note_val; self.mark_dirty(); self.refresh_all()
@@ -701,12 +1109,19 @@ class MbseqStudio(tk.Tk):
         else: steps[idx].note = note
         self.mark_dirty(); self.move_cursor(1, refresh=False); self.refresh_all()
     def insert_rest(self) -> None:
-        steps = self.steps(); idx = self.cursor.get(); if idx >= len(steps) and self._at_step_limit(): return
+        steps = self.steps()
+        idx = self.cursor.get()
+        if idx >= len(steps) and self._at_step_limit():
+            return
         self.push_undo()
         if idx >= len(steps): steps.append(Step(note=None))
         else: steps[idx].note = None
         self.mark_dirty(); self.move_cursor(1, refresh=False); self.refresh_all()
-    def move_cursor(self, delta: int, refresh=True) -> None: self.cursor.set(max(0, min(len(self.steps())-1, self.cursor.get()+delta))); if refresh: self.refresh_grid(); self.refresh_piano_roll()
+    def move_cursor(self, delta: int, refresh=True) -> None:
+        self.cursor.set(max(0, min(len(self.steps())-1, self.cursor.get()+delta)))
+        if refresh:
+            self.refresh_grid()
+            self.refresh_piano_roll()
     def change_slot(self) -> None:
         self.cursor.set(0); self.bank_name_var.set(self.project.bank_names.get(int(self.slot.get()), f'Bank {self.slot.get()}'))
         self.clear_selection(); self.refresh_all()
@@ -817,6 +1232,68 @@ class MbseqStudio(tk.Tk):
             self.mark_dirty(); self.refresh_all()
         self._drag_idx = None
     def _on_step_click(self, event: tk.Event, idx: int) -> None: self._on_drag_start(idx); self.select_step(idx, event)
+
+    def select_step(self, idx: int, event: tk.Event | None = None) -> None:
+        steps = self.steps()
+        if not 0 <= idx < len(steps):
+            return
+        old_cursor = self.cursor.get()
+        self.cursor.set(idx)
+        if event and event.state & 0x0001:
+            start, end = sorted((old_cursor, idx))
+            self._selection.update(range(start, end + 1))
+        elif event and event.state & (0x0004 | 0x20000):
+            if idx in self._selection:
+                self._selection.remove(idx)
+            else:
+                self._selection.add(idx)
+        else:
+            self._selection = {idx}
+        self.refresh_grid()
+        self.refresh_piano_roll()
+        if steps[idx].note is not None:
+            self.preview_note(steps[idx].note)
+
+    def refresh_keyboard(self) -> None:
+        bg_col = '#333333' if self.dark_mode.get() else '#666666'
+        self.keyboard.configure(bg=bg_col)
+        self.keyboard.delete('all')
+        self.key_rects.clear()
+        white_w, white_h = 66, 180
+        black_w, black_h = 42, 108
+        x0, y0 = 10, 10
+        for wi, off in enumerate(WHITE_OFFSETS):
+            note = self.note_for_index(off)
+            x = x0 + wi * white_w
+            rect = self.keyboard.create_rectangle(
+                x, y0, x + white_w, y0 + white_h, fill='white', outline='black'
+            )
+            self.key_rects[note] = rect
+            self.keyboard.tag_bind(rect, '<Button-1>', lambda e, n=note: self.insert_note(n))
+            self.keyboard.tag_bind(rect, '<Button-3>', lambda e, n=note: self.preview_note(n))
+            self.keyboard.create_text(
+                x + white_w / 2, y0 + white_h - 22,
+                text=midi_to_name(note), fill='black', state='disabled',
+            )
+        for off in BLACK_OFFSETS:
+            note = self.note_for_index(off)
+            x = x0 + BLACK_POS[off] * white_w
+            rect = self.keyboard.create_rectangle(
+                x, y0, x + black_w, y0 + black_h, fill='black', outline='black'
+            )
+            self.key_rects[note] = rect
+            self.keyboard.tag_bind(rect, '<Button-1>', lambda e, n=note: self.insert_note(n))
+            self.keyboard.tag_bind(rect, '<Button-3>', lambda e, n=note: self.preview_note(n))
+            self.keyboard.create_text(
+                x + black_w / 2, y0 + black_h - 18,
+                text=midi_to_name(note), fill='white', state='disabled',
+            )
+        low = self.note_for_index(0)
+        high = self.note_for_index(24)
+        self.keyboard.create_text(
+            20, 202, anchor='w', fill='#ffffff',
+            text=f'Range: {midi_to_name(low)} to {midi_to_name(high)}',
+        )
 
     def duplicate_bank_dialog(self) -> None:
         win = tk.Toplevel(self); win.title('Duplicate'); win.geometry('300x150'); win.transient(self); win.grab_set()
