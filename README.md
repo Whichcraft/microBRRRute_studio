@@ -129,7 +129,9 @@ CI runs these on Linux, Windows and macOS (Python 3.10 & 3.12) on every push.
 8:48 x x 72
 ```
 
-Numbers are MIDI note values (`0`–`127`); `x` is a rest.
+Numbers are MIDI note values (`0`–`127`); `x` is a rest. 
+
+**Example Project:** A sample project (`around_the_world.mbseq`) is included, featuring a transcription of the iconic Daft Punk bassline. *(Transcription credit: Community-sourced from Arturia MicroBrute user forums).*
 
 ---
 

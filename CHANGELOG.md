@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.7.1] - 2026-06-07
+
+### Added
+- **Sample Project** — included `around_the_world.mbseq`, a community-sourced
+  transcription of the classic Daft Punk bassline, to help users get started.
+
 ## [0.7.0] - 2026-06-07
 
 ### Added
