@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.7.4] - 2026-06-07
+
+### Fixed
+- Fixed build pipeline failure by removing a reference to a missing icon file
+  in the PyInstaller spec.
+- Hardened artifact staging logic in the Release workflow for more reliable
+  multi-platform builds.
+
 ## [0.7.3] - 2026-06-07
 
 ### Changed

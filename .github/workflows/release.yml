@@ -71,16 +71,13 @@ jobs:
         run: python -m pip install --upgrade pip pyinstaller
       - name: Build executable
         run: python -m PyInstaller --noconfirm microBRRRute_Studio.spec
+      - name: List build output
+        run: ls -R dist/
       - name: Stage artifact
         shell: bash
         run: |
           mkdir -p out
-          # Handle potential path differences between OSes
-          if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            cp "dist/microBRRRute_Studio.exe" "out/${{ matrix.artifact }}"
-          else
-            cp "dist/microBRRRute_Studio" "out/${{ matrix.artifact }}"
-          fi
+          cp "${{ matrix.built }}" "out/${{ matrix.artifact }}"
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
