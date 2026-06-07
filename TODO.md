@@ -28,6 +28,7 @@ Proposed improvements, roughly ordered by value. Done items move to
 
 ## Import / export
 - [ ] Drag-and-drop `.mbseq` files onto the window to open.
+- [ ] Export the whole song to a single WAV (evaluate usefulness).
 
 ## Quality / infra
 - [ ] Type-check with `mypy` / `ruff` in CI.

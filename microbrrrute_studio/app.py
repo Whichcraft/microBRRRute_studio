@@ -79,7 +79,6 @@ class MbseqStudio(tk.Tk):
         ttk.Button(top, text='Export Bank MIDI', command=self.export_midi_file).pack(side='left', padx=4)
         ttk.Button(top, text='Export Song MIDI', command=self.export_song_midi_file).pack(side='left', padx=2)
         ttk.Button(top, text='Export Bank WAV', command=self.export_bank_wav).pack(side='left', padx=2)
-        ttk.Button(top, text='Export Song WAV', command=self.export_song_wav).pack(side='left', padx=2)
         ttk.Button(top, text='Show Audio Error', command=self.show_audio_error).pack(side='left', padx=(6,0))
 
         edit = ttk.Frame(self, padding=(8,0,8,6))
@@ -141,7 +140,6 @@ class MbseqStudio(tk.Tk):
         fm.add_command(label='Export all 8 banks as MIDI files...', command=self.export_all_midi_files)
         fm.add_command(label='Export song (all banks) as one MIDI...', command=self.export_song_midi_file)
         fm.add_command(label='Export selected bank as WAV...', command=self.export_bank_wav)
-        fm.add_command(label='Export song (all banks) as one WAV...', command=self.export_song_wav)
         fm.add_separator()
         fm.add_command(label='Exit', command=self.on_close)
         m.add_cascade(label='File', menu=fm)
@@ -275,21 +273,6 @@ class MbseqStudio(tk.Tk):
                              wave_shape=self.wave_shape.get(), volume=self.volume.get())
         except Exception as e:
             messagebox.showerror('WAV export failed', str(e))
-
-    def export_song_wav(self):
-        banks = [self.project.sequences[b] for b in range(1, 9)
-                 if any(n is not None for n in self.project.sequences.get(b, []))]
-        if not banks:
-            return messagebox.showinfo('Export song WAV', 'All banks are empty.')
-        p = filedialog.asksaveasfilename(defaultextension='.wav',
-            filetypes=[('WAV audio','*.wav'),('All files','*.*')])
-        if not p: return
-        try:
-            all_steps = [step for bank in banks for step in bank]
-            render_steps_wav(p, all_steps, bpm=self.tempo.get(),
-                             wave_shape=self.wave_shape.get(), volume=self.volume.get())
-        except Exception as e:
-            messagebox.showerror('Export song WAV failed', str(e))
 
     def on_close(self):
         self.stop_sequence()

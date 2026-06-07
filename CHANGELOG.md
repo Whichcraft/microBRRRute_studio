@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.5.7] - 2026-06-07
+
+### Removed
+- Removed the experimental "Export song to WAV" feature (concatenating all banks
+  into one WAV). Per-bank export remains the correct workflow for patterns.
+
 ## [0.5.6] - 2026-06-07
 
 ### Added
