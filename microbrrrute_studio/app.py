@@ -61,6 +61,7 @@ class MbseqStudio(tk.Tk):
         self.title('microBRRRute Studio - MicroBrute SE Composer')
         self.geometry('1380x850')
         self.minsize(1050, 700)
+        self._set_icon()
 
         self.project = MbseqProject.empty()
         self.file_path: Path | None = None
@@ -98,6 +99,21 @@ class MbseqStudio(tk.Tk):
         self._bind_keys()
         self.protocol('WM_DELETE_WINDOW', self.on_close)
         self.refresh_all()
+
+    def _set_icon(self):
+        # Find icon file (handles running from source or frozen EXE)
+        icon_dir = Path(__file__).parent.parent
+        icon_png = icon_dir / 'icon.png'
+        icon_ico = icon_dir / 'icon.ico'
+        
+        try:
+            if icon_png.exists():
+                self._icon_img = tk.PhotoImage(file=str(icon_png))
+                self.iconphoto(True, self._icon_img)
+            elif icon_ico.exists() and sys.platform == 'win32':
+                self.iconbitmap(str(icon_ico))
+        except Exception:
+            pass
 
     def _setup_dnd(self):
         if sys.platform != 'win32':

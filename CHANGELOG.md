@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.7.5] - 2026-06-07
+
+### Added
+- **Custom App Icon** — added an official app icon (🎹) generated from the
+  system's emoji font. The icon is now visible in the window title bar and
+  baked into the standalone executables.
+
 ## [0.7.4] - 2026-06-07
 
 ### Fixed
