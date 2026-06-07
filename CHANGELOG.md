@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.5.3] - 2026-06-07
+
+### Added
+- **Clean exit on Ctrl+C** — the application now exits gracefully without a
+  Python traceback when interrupted from the terminal.
+
+### Fixed
+- Scrubbed AI assistant names from public-facing code and documentation.
+
 ## [0.5.2] - 2026-06-07
 
 ### Changed
