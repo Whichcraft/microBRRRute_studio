@@ -16,3 +16,4 @@ venv/
 # AI
 .claude/
 CLAUDE.md
+GEMINI.md
