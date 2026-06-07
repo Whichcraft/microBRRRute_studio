@@ -36,28 +36,28 @@ Every version bump merged to `main` is built and published automatically by CI.
 - **On-screen 25-key MicroBrute keyboard.** Click to insert + audition a note,
   right-click to preview without editing, or play from your computer keyboard
   (`A W S E D F T G Y H U J K …`).
+- **Visual Feedback.** Keys light up in real-time during playback.
 - **Built-in software synth** with selectable oscillator
-  (square / saw / triangle / sine), volume control and octave shift — no audio
-  drivers or external soundfonts required.
-- **Reliable transport.**
-  - **▶ Play Bank** auditions the selected bank.
-  - **▶▶ Play All** chains every non-empty bank into one song.
-  - **■ Stop** (or `Esc`) *actually stops the sound immediately* — including the
-    note currently sounding.
-  - **Loop** toggle for continuous playback.
-  - A green **playhead** highlights the step that's sounding, distinct from the
-    blue edit cursor.
-- **Step editor** — add / delete steps, insert rests (`R`), transpose a bank by
-  semitone or octave, clear or duplicate a whole bank. Banks are capped at the
-  MicroBrute's **64-step** hardware limit.
-- **Undo / redo** (`Ctrl+Z` / `Ctrl+Y`) across every edit.
-- **Raw text view** — edit the underlying `.mbseq` text directly and apply it
-  back, with validation.
-- **Import & export** — import a MIDI file into a bank; export the selected
-  bank, all 8 banks separately, or the whole song concatenated as MIDI; bounce a
-  bank to **WAV**. (Handwritten Standard MIDI File reader/writer — no deps.)
-- **Unsaved-changes guard** — the title bar shows a `*` when modified and the
-  app asks before you quit on unsaved work.
+  (square / saw / triangle / sine), volume control and octave shift.
+- **Rock-solid transport.**
+  - **Rock-solid timing via pre-rendering** — entire sequences are pre-rendered
+    to a single audio buffer on Play to eliminate jitter.
+  - **■ Stop** (or `Esc`) stops the sound immediately.
+  - **Loop**, **Metronome**, and **Count-in** toggles.
+  - A green **playhead** highlights the sounding step.
+- **Powerful step editor.**
+  - **Click-and-drag reordering** — move steps by dragging them on the grid.
+  - **Configurable Bank Settings** — set the active bank length (1–64) and
+    toggle between 1/8 and 1/16 note resolutions.
+  - Add / delete steps, insert rests (`R`), transpose a bank by semitone/octave.
+  - **Undo / redo** (`Ctrl+Z` / `Ctrl+Y`) across every edit.
+- **Dark Mode.** High-contrast dark theme for low-light sessions.
+- **Recent files menu.** Quick access to your 10 most recently used files.
+- **Raw text view.** Edit the underlying `.mbseq` text directly with validation.
+- **Import & export.** Import MIDI; export bank/song as MIDI; bounce bank to **WAV**.
+  (Anti-click protection included).
+- **Unsaved-changes guard.** Title bar shows `*` and app warns before quitting.
+- **Tooltips.** Hover over any button for help.
 
 ---
 
@@ -120,13 +120,13 @@ CI runs these on Linux, Windows and macOS (Python 3.10 & 3.12) on every push.
 
 ## 📄 The `.mbseq` format
 
-`.mbseq` is plain text — one line per pattern bank, `slot:notes`:
+`.mbseq` is plain text — one line per pattern bank, `slot:notes`. Each bank is
+standardized to **exactly 64 steps** (padded with `x` if shorter) to ensure full
+compatibility with Arturia hardware.
 
 ```text
-1:53 53 55 x 60
-2:60 60 x 64
-...
-8:48 x x 72
+1:53 53 55 x 60 ... (64 tokens total)
+2:60 60 x 64 ... (64 tokens total)
 ```
 
 Numbers are MIDI note values (`0`–`127`); `x` is a rest. 

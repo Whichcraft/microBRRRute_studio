@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.7.3] - 2026-06-07
+
+### Changed
+- Comprehensive documentation update: README.md now reflects all recent features
+  (Dark Mode, Tooltips, Pre-rendering, etc.).
+- Refined the roadmap in TODO.md with new planned features like MIDI Input
+  and partial Copy/Paste.
+
 ## [0.7.2] - 2026-06-07
 
 ### Removed
