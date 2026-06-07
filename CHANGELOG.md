@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.8.5] - 2026-06-07
+
+### Changed
+- Updated documentation with a note that the application may also work for the
+  MiniBrute, though it remains untested as I only have access to a MicroBrute SE.
+  Feedback from MiniBrute users is welcome.
+
 ## [0.8.4] - 2026-06-07
 
 ### Fixed

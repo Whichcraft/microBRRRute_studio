@@ -6,7 +6,9 @@
 
 microBRRRute Studio is a lightweight Python/Tkinter app for creating, editing and
 auditioning `.mbseq` pattern files — the plain-text sequence format used by the
-Arturia MicroBrute SE. Compose on an on-screen 25-key keyboard, hear what you
+Arturia MicroBrute SE. (Note: It maybe also works for the MiniBrute, but it's
+untested as I only have a MicroBrute SE here. Feel free to test and send me your
+feedback, thanks!) Compose on an on-screen 25-key keyboard, hear what you
 write through a built-in software synth, juggle all 8 pattern banks, and export
 to standard MIDI when you're ready to take it elsewhere.
 
