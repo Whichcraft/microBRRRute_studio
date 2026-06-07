@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.8.1] - 2026-06-07
+
+### Changed
+- Restricted both CI and Release pipelines to only trigger on pushes or merges
+  to the `main` branch. Pushes to `dev` will no longer trigger any automated
+  actions.
+
 ## [0.8.0] - 2026-06-07
 
 ### Fixed
