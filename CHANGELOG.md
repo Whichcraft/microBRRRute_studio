@@ -8,6 +8,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.5.6] - 2026-06-07
+
+### Added
+- **Visual feedback on keyboard** — keys now light up green when played (manually
+  or via the sequencer) to provide better visual orientation.
+
+## [0.5.5] - 2026-06-07
+
+### Added
+- **Metronome** toggle — audible clicks on quarter-note beats to help with
+  composition.
+
+## [0.5.4] - 2026-06-07
+
+### Added
+- **Export song to WAV** — concatenates all non-empty banks into a single audio
+  render (available in the File menu and the main toolbar).
+
 ## [0.5.3] - 2026-06-07
 
 ### Added

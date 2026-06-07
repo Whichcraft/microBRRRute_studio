@@ -14,21 +14,20 @@ Proposed improvements, roughly ordered by value. Done items move to
 - [ ] Anti-click: short crossfade between consecutive notes.
 
 ## Editing & workflow
-- [ ] **Copy / paste** steps and ranges between banks.
-- [ ] Click-and-drag to **reorder** steps.
-- [ ] **Metronome / count-in** option.
-- [ ] Configurable **steps-per-bank** and time signature (eighths vs sixteenths).
+- [ ] Copy / paste steps and ranges between banks.
+- [ ] Click-and-drag to reorder steps.
+- [ ] **Count-in** option.
+- [ ] Configurable steps-per-bank and time signature (eighths vs sixteenths).
+
 - [ ] Recent-files menu.
 
 ## UI / UX
-- [ ] Visual feedback on the on-screen keyboard for the playing note.
 - [ ] Dark theme / high-contrast option.
 - [ ] Resizable, scrollable step grid that reflows on window resize.
 - [ ] Tooltips on transport and editor buttons.
 
 ## Import / export
 - [ ] Drag-and-drop `.mbseq` files onto the window to open.
-- [ ] Export the whole song to a single WAV (currently per-bank only).
 
 ## Quality / infra
 - [ ] Type-check with `mypy` / `ruff` in CI.

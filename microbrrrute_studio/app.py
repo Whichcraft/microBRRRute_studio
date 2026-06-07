@@ -30,6 +30,7 @@ class MbseqStudio(tk.Tk):
         self.wave_shape = tk.StringVar(value='square')
         self.volume = tk.DoubleVar(value=0.28)
         self.loop = tk.BooleanVar(value=True)
+        self.metronome = tk.BooleanVar(value=False)
         self.playing = False
         self.dirty = False
         self._undo: list[dict[int, list[int | None]]] = []
@@ -39,7 +40,7 @@ class MbseqStudio(tk.Tk):
         self._playhead = -1            # step currently sounding (-1 = none)
         self._play_banks: list[int] = []  # bank queue when playing all banks
         self.step_buttons: list[tk.Button] = []
-        self.key_buttons: dict[int, tk.Button] = {}
+        self.key_rects: dict[int, int] = {}
         self.play_btn: ttk.Button | None = None
         self.stop_btn: ttk.Button | None = None
 
@@ -71,12 +72,14 @@ class MbseqStudio(tk.Tk):
         self.stop_btn = ttk.Button(top, text='■ Stop', command=self.stop_sequence, state='disabled')
         self.stop_btn.pack(side='left', padx=3)
         ttk.Checkbutton(top, text='Loop', variable=self.loop).pack(side='left')
+        ttk.Checkbutton(top, text='Metronome', variable=self.metronome).pack(side='left', padx=3)
         ttk.Button(top, text='Test Sound', command=lambda: self.preview_note(60)).pack(side='left', padx=3)
         ttk.Label(top, text='BPM').pack(side='left', padx=(10,2))
         ttk.Spinbox(top, from_=30, to=300, textvariable=self.tempo, width=5).pack(side='left')
         ttk.Button(top, text='Export Bank MIDI', command=self.export_midi_file).pack(side='left', padx=4)
         ttk.Button(top, text='Export Song MIDI', command=self.export_song_midi_file).pack(side='left', padx=2)
         ttk.Button(top, text='Export Bank WAV', command=self.export_bank_wav).pack(side='left', padx=2)
+        ttk.Button(top, text='Export Song WAV', command=self.export_song_wav).pack(side='left', padx=2)
         ttk.Button(top, text='Show Audio Error', command=self.show_audio_error).pack(side='left', padx=(6,0))
 
         edit = ttk.Frame(self, padding=(8,0,8,6))
@@ -138,6 +141,7 @@ class MbseqStudio(tk.Tk):
         fm.add_command(label='Export all 8 banks as MIDI files...', command=self.export_all_midi_files)
         fm.add_command(label='Export song (all banks) as one MIDI...', command=self.export_song_midi_file)
         fm.add_command(label='Export selected bank as WAV...', command=self.export_bank_wav)
+        fm.add_command(label='Export song (all banks) as one WAV...', command=self.export_song_wav)
         fm.add_separator()
         fm.add_command(label='Exit', command=self.on_close)
         m.add_cascade(label='File', menu=fm)
@@ -272,6 +276,21 @@ class MbseqStudio(tk.Tk):
         except Exception as e:
             messagebox.showerror('WAV export failed', str(e))
 
+    def export_song_wav(self):
+        banks = [self.project.sequences[b] for b in range(1, 9)
+                 if any(n is not None for n in self.project.sequences.get(b, []))]
+        if not banks:
+            return messagebox.showinfo('Export song WAV', 'All banks are empty.')
+        p = filedialog.asksaveasfilename(defaultextension='.wav',
+            filetypes=[('WAV audio','*.wav'),('All files','*.*')])
+        if not p: return
+        try:
+            all_steps = [step for bank in banks for step in bank]
+            render_steps_wav(p, all_steps, bpm=self.tempo.get(),
+                             wave_shape=self.wave_shape.get(), volume=self.volume.get())
+        except Exception as e:
+            messagebox.showerror('Export song WAV failed', str(e))
+
     def on_close(self):
         self.stop_sequence()
         if self.dirty and not messagebox.askokcancel('Unsaved changes',
@@ -306,7 +325,7 @@ class MbseqStudio(tk.Tk):
 
     def refresh_keyboard(self):
         self.keyboard.delete('all')
-        self.key_buttons.clear()
+        self.key_rects.clear()
         white_w, white_h = 66, 180
         black_w, black_h = 42, 108
         x0, y0 = 10, 10
@@ -315,6 +334,7 @@ class MbseqStudio(tk.Tk):
             note = self.root_note + self.octave_shift.get()*12 + off
             x = x0 + wi*white_w
             rect = self.keyboard.create_rectangle(x,y0,x+white_w,y0+white_h, fill='white', outline='black')
+            self.key_rects[note] = rect
             self.keyboard.tag_bind(rect, '<Button-1>', lambda e, n=note: self.insert_note(n))
             self.keyboard.tag_bind(rect, '<Button-3>', lambda e, n=note: self.preview_note(n))
             label = self.keyboard.create_text(x+white_w/2, y0+white_h-22, text=midi_to_name(note), fill='black')
@@ -323,6 +343,7 @@ class MbseqStudio(tk.Tk):
             note = self.root_note + self.octave_shift.get()*12 + off
             x = x0 + BLACK_POS[off]*white_w
             rect = self.keyboard.create_rectangle(x,y0,x+black_w,y0+black_h, fill='black', outline='black')
+            self.key_rects[note] = rect
             self.keyboard.tag_bind(rect, '<Button-1>', lambda e, n=note: self.insert_note(n))
             self.keyboard.tag_bind(rect, '<Button-3>', lambda e, n=note: self.preview_note(n))
             label = self.keyboard.create_text(x+black_w/2, y0+black_h-18, text=midi_to_name(note), fill='white')
@@ -331,6 +352,17 @@ class MbseqStudio(tk.Tk):
 
     def preview_note(self, note:int, duration: float = 0.18):
         play_note(note, duration=duration, wave_shape=self.wave_shape.get(), volume=self.volume.get())
+        self.highlight_note(note)
+
+    def highlight_note(self, note: int):
+        if note not in self.key_rects:
+            return
+        rect = self.key_rects[note]
+        # Determine original color
+        off = (note - self.root_note - self.octave_shift.get()*12) % 24
+        orig = 'black' if off in BLACK_OFFSETS else 'white'
+        self.keyboard.itemconfig(rect, fill='#7CFC8A')  # same green as playhead
+        self.after(200, lambda: self.keyboard.itemconfig(rect, fill=orig))
 
     def insert_note(self, note:int):
         self.preview_note(note)
@@ -527,6 +559,10 @@ class MbseqStudio(tk.Tk):
         idx = self._play_idx
         self._playhead = idx
         self.refresh_grid()
+        if self.metronome.get():
+            # Play a click on quarter-note beats (every 2 steps)
+            is_beat = (idx % 2 == 0)
+            self.preview_note(84 if is_beat else 72, duration=0.03)
         note = steps[idx]
         if note is not None:
             self.preview_note(note, duration=max(0.05, ms / 1000 * 0.82))
