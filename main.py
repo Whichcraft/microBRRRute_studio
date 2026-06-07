@@ -1,2 +1,2 @@
-from mbseq_studio.app import main
+from microbrrrute_studio.app import main
 main()

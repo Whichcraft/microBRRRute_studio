@@ -3,9 +3,9 @@ import struct
 import wave
 from pathlib import Path
 
-from mbseq_studio.mbseq import MbseqProject, midi_to_name, name_to_midi, transpose_steps
-from mbseq_studio.midi_export import export_midi, export_song_midi, import_midi, vlq
-from mbseq_studio.synth import make_wave, midi_freq, render_steps_wav
+from microbrrrute_studio.mbseq import MbseqProject, midi_to_name, name_to_midi, transpose_steps
+from microbrrrute_studio.midi_export import export_midi, export_song_midi, import_midi, vlq
+from microbrrrute_studio.synth import make_wave, midi_freq, render_steps_wav
 
 
 def test_parse_roundtrip():

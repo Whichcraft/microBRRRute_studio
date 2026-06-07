@@ -1,10 +1,10 @@
-# 🎹 MBSEQ Studio
+# 🎹 microBRRRute Studio
 
-[![CI](https://github.com/Whichcraft/mbseq_studio/actions/workflows/ci.yml/badge.svg)](https://github.com/Whichcraft/mbseq_studio/actions/workflows/ci.yml)
+[![CI](https://github.com/Whichcraft/microBRRRute_studio/actions/workflows/ci.yml/badge.svg)](https://github.com/Whichcraft/microBRRRute_studio/actions/workflows/ci.yml)
 
 **A desktop composer for Arturia MicroBrute SE sequences.**
 
-MBSEQ Studio is a lightweight Python/Tkinter app for creating, editing and
+microBRRRute Studio is a lightweight Python/Tkinter app for creating, editing and
 auditioning `.mbseq` pattern files — the plain-text sequence format used by the
 Arturia MicroBrute SE. Compose on an on-screen 25-key keyboard, hear what you
 write through a built-in software synth, juggle all 8 pattern banks, and export
@@ -76,7 +76,7 @@ python3 main.py
 build_windows_exe.bat
 ```
 
-Produces a single-file executable at `dist\MBSEQ_Studio.exe`.
+Produces a single-file executable at `dist\microBRRRute_Studio.exe`.
 
 ---
 
@@ -112,7 +112,7 @@ Numbers are MIDI note values (`0`–`127`); `x` is a rest.
 ## 📐 Project layout
 
 ```text
-mbseq_studio/
+microbrrrute_studio/
   app.py          Tkinter UI + transport
   synth.py        Software synth + cross-platform, stoppable playback engine
   mbseq.py        .mbseq parse / serialize, MIDI note-name helpers

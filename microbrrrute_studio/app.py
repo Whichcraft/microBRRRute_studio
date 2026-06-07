@@ -16,7 +16,7 @@ PC_KEYS = list('awsedftgyhujkolpö')
 class MbseqStudio(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title('MBSEQ Studio - MicroBrute SE Composer')
+        self.title('microBRRRute Studio - MicroBrute SE Composer')
         self.geometry('1380x850')
         self.minsize(1050, 700)
 
@@ -190,7 +190,7 @@ class MbseqStudio(tk.Tk):
         flag = ' *modified' if self.dirty else ''
         self.status.config(text=f'{path}{flag} | Bank {self.slot.get()}/8 | Steps {len(self.steps())} | Cursor {cur} | Banks: {loaded}')
         name = self.file_path.name if self.file_path else 'untitled'
-        self.title(f'{"*" if self.dirty else ""}{name} - MBSEQ Studio')
+        self.title(f'{"*" if self.dirty else ""}{name} - microBRRRute Studio')
 
     def mark_dirty(self):
         self.dirty = True

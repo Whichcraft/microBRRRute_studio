@@ -22,7 +22,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='MBSEQ_Studio',
+    name='microBRRRute_Studio',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

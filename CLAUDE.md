@@ -1,4 +1,4 @@
-# Project instructions: MBSEQ Studio
+# Project instructions: microBRRRute Studio
 
 ## Git workflow
 
