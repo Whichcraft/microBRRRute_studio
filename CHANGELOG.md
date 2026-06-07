@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.12.1] - 2026-06-07
+
+### Added
+- The Arpeggiator now provides explicit target start/end controls and a
+  multi-select source-note list.
+- Source notes can be added directly using note names such as `C3 E3 G3` or
+  MIDI note numbers; a pre-existing multi-step selection is no longer required.
+
+### Fixed
+- The Piano Roll now redraws immediately after its initial pane layout and on
+  canvas resize, so it is visible at startup without requiring a click.
+
 ## [0.12.0] - 2026-06-07
 
 ### Added

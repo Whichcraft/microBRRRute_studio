@@ -19,6 +19,7 @@ from .mbseq import (
     MbseqProject,
     Step,
     midi_to_name,
+    name_to_midi,
     transpose_steps,
 )
 from .synth import (
@@ -255,7 +256,7 @@ class MbseqStudio(tk.Tk):
         ToolTip(b, "Generate random sequence within scale (Ctrl+R)")
         b = ttk.Button(edit, text="Arpeggiate...", command=self.show_arpeggiator_dialog)
         b.pack(side="left", padx=3)
-        ToolTip(b, "Arpeggiate selection")
+        ToolTip(b, "Choose source notes and target steps for an arpeggio")
 
         ttk.Separator(edit, orient="vertical").pack(side="left", fill="y", padx=10)
         b = ttk.Button(edit, text="+ Step", command=self.add_step)
@@ -324,6 +325,7 @@ class MbseqStudio(tk.Tk):
             highlightthickness=0,
         )
         self.piano_roll.pack(fill="both", expand=True)
+        self.piano_roll.bind("<Configure>", self._on_piano_roll_resize)
         self.piano_roll.bind("<ButtonPress-1>", self._on_piano_roll_press)
         self.piano_roll.bind("<B1-Motion>", self._on_piano_roll_drag)
         self.piano_roll.bind("<ButtonRelease-1>", self._on_piano_roll_release)
@@ -461,6 +463,12 @@ class MbseqStudio(tk.Tk):
             self.after(50, self._set_initial_piano_roll_size)
             return
         self.paned.sashpos(0, max(250, height // 2))
+        self.update_idletasks()
+        self.refresh_piano_roll()
+
+    def _on_piano_roll_resize(self, event: tk.Event) -> None:
+        if event.widget == self.piano_roll:
+            self.refresh_piano_roll()
 
     def focus_bank_name(self) -> None:
         if hasattr(self, "name_entry"):
@@ -715,18 +723,24 @@ class MbseqStudio(tk.Tk):
         )
 
     def show_arpeggiator_dialog(self) -> None:
-        if not self._selection:
-            messagebox.showinfo(
-                "Arpeggiator", "Please select steps to arpeggiate first."
-            )
-            return
+        steps = self.steps()
+        selected = sorted(i for i in self._selection if 0 <= i < len(steps))
+        if len(selected) >= 2:
+            default_start = selected[0] + 1
+            default_end = selected[-1] + 1
+        else:
+            default_start = min(len(steps), self.cursor.get() + 1)
+            default_end = min(len(steps), default_start + 7)
+
         win = tk.Toplevel(self)
         win.title("Arpeggiator")
-        win.geometry("300x200")
+        win.geometry("420x460")
+        win.resizable(False, False)
         win.transient(self)
         win.grab_set()
         f = ttk.Frame(win, padding=20)
         f.pack(fill="both", expand=True)
+
         mode = tk.StringVar(value="Up")
         ttk.Label(f, text="Arp Mode").pack(anchor="w")
         ttk.Combobox(
@@ -734,31 +748,124 @@ class MbseqStudio(tk.Tk):
             textvariable=mode,
             values=["Up", "Down", "Up-Down", "Random"],
             state="readonly",
-        ).pack(fill="x", pady=10)
+        ).pack(fill="x", pady=(4, 10))
 
-        def do_arp():
-            indices = sorted(list(self._selection))
-            steps = self.steps()
-            notes = [steps[i].note for i in indices if steps[i].note is not None]
+        target = ttk.LabelFrame(f, text="Target steps", padding=8)
+        target.pack(fill="x", pady=(0, 10))
+        start_var = tk.IntVar(value=default_start)
+        end_var = tk.IntVar(value=default_end)
+        ttk.Label(target, text="Start").grid(row=0, column=0, sticky="w")
+        ttk.Spinbox(
+            target,
+            from_=1,
+            to=max(1, len(steps)),
+            textvariable=start_var,
+            width=6,
+        ).grid(row=0, column=1, padx=(4, 16))
+        ttk.Label(target, text="End").grid(row=0, column=2, sticky="w")
+        ttk.Spinbox(
+            target,
+            from_=1,
+            to=max(1, len(steps)),
+            textvariable=end_var,
+            width=6,
+        ).grid(row=0, column=3, padx=4)
+
+        notes_frame = ttk.LabelFrame(f, text="Source notes", padding=8)
+        notes_frame.pack(fill="both", expand=True)
+        ttk.Label(
+            notes_frame,
+            text="Click notes to include or exclude them from the arpeggio.",
+        ).pack(anchor="w")
+        note_list = tk.Listbox(
+            notes_frame,
+            selectmode="multiple",
+            exportselection=False,
+            height=9,
+        )
+        note_list.pack(fill="both", expand=True, pady=(6, 8))
+        available_notes = sorted({step.note for step in steps if step.note is not None})
+
+        def refresh_note_list(select_all: bool = False) -> None:
+            note_list.delete(0, "end")
+            for note in available_notes:
+                note_list.insert("end", f"{midi_to_name(note)} ({note})")
+            if select_all and available_notes:
+                note_list.selection_set(0, "end")
+
+        refresh_note_list(select_all=True)
+
+        add_row = ttk.Frame(notes_frame)
+        add_row.pack(fill="x")
+        note_entry = ttk.Entry(add_row)
+        note_entry.pack(side="left", fill="x", expand=True)
+        note_entry.insert(0, "C3 E3 G3")
+
+        def add_notes() -> None:
+            tokens = note_entry.get().replace(",", " ").split()
+            if not tokens:
+                return
+            try:
+                new_notes = [name_to_midi(token) for token in tokens]
+            except (TypeError, ValueError) as exc:
+                messagebox.showerror("Arpeggiator", str(exc), parent=win)
+                return
+            for note in new_notes:
+                if note not in available_notes:
+                    available_notes.append(note)
+            available_notes.sort()
+            refresh_note_list()
+            for i, note in enumerate(available_notes):
+                if note in new_notes:
+                    note_list.selection_set(i)
+            note_entry.delete(0, "end")
+
+        ttk.Button(add_row, text="Add notes", command=add_notes).pack(
+            side="left", padx=(6, 0)
+        )
+
+        def do_arp() -> None:
+            start = max(1, min(len(steps), start_var.get()))
+            end = max(1, min(len(steps), end_var.get()))
+            start, end = sorted((start, end))
+            indices = list(range(start - 1, end))
+            notes = [available_notes[i] for i in note_list.curselection()]
             if not notes:
-                return win.destroy()
-            if mode.get() == "Up":
-                arp_notes = sorted(notes)
-            elif mode.get() == "Down":
-                arp_notes = sorted(notes, reverse=True)
-            elif mode.get() == "Up-Down":
-                arp_notes = sorted(notes) + sorted(notes, reverse=True)[1:-1]
-            else:
-                arp_notes = list(notes)
-                random.shuffle(arp_notes)
+                messagebox.showinfo(
+                    "Arpeggiator",
+                    "Select at least one source note.",
+                    parent=win,
+                )
+                return
+            arp_notes = self._build_arpeggio(notes, mode.get())
             self.push_undo()
             for i, idx in enumerate(indices):
                 steps[idx].note = arp_notes[i % len(arp_notes)]
+            self._selection = set(indices)
+            self.cursor.set(indices[0])
             self.mark_dirty()
             self.refresh_all()
             win.destroy()
 
-        ttk.Button(f, text="Apply Arp", command=do_arp).pack(side="bottom", pady=10)
+        buttons = ttk.Frame(f)
+        buttons.pack(fill="x", pady=(10, 0))
+        ttk.Button(buttons, text="Apply Arp", command=do_arp).pack(side="right")
+        ttk.Button(buttons, text="Cancel", command=win.destroy).pack(
+            side="right", padx=6
+        )
+
+    @staticmethod
+    def _build_arpeggio(notes: list[int], mode: str) -> list[int]:
+        ordered = sorted(set(notes))
+        if mode == "Down":
+            return list(reversed(ordered))
+        if mode == "Up-Down" and len(ordered) > 1:
+            return ordered + list(reversed(ordered[1:-1]))
+        if mode == "Random":
+            shuffled = list(ordered)
+            random.shuffle(shuffled)
+            return shuffled
+        return ordered
 
     def mark_dirty(self) -> None:
         self.dirty = True

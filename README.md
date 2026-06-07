@@ -45,8 +45,10 @@ Every version bump merged to `main` is built and published automatically by CI.
 - **Musical Pattern Randomizer.** Generate coherent sequences within specific
   scales (Major, Minor, Pentatonic, Blues, etc.). Control root note, octave
   range, and density.
-- **Arpeggiator Tool.** Transform selected steps into complex arpeggios (Up,
-  Down, Up-Down, Random) with a single click.
+- **Arpeggiator Tool.** Choose the exact target step range and source notes,
+  including notes entered by name (`C3 E3 G3`) or MIDI number. Generate Up,
+  Down, Up-Down, or Random patterns without preparing a multi-step selection
+  first.
 - **ADSR Envelope Controls.** Fine-tune the synth's character with persistent
   Attack, Decay, Sustain, and Release settings.
 - **All 8 pattern banks with Custom Naming.** Switch between banks and give
@@ -112,6 +114,14 @@ Every version bump merged to `main` is built and published automatically by CI.
 The **Horizontal / Vertical** controls above the Piano Roll transpose the
 editor layout. Horizontal mode places time left-to-right; Vertical mode places
 time top-to-bottom. The chosen orientation is saved in app settings.
+
+### Arpeggiator
+
+Open **Arpeggiate...** from the edit toolbar. Set the first and last target
+steps, click notes in the source-note list to include or exclude them, and use
+**Add notes** to enter additional note names or MIDI values. The generated
+range becomes the active selection so it can immediately be transposed,
+copied, or edited.
 
 ---
 
