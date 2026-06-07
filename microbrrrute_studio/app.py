@@ -168,7 +168,7 @@ class MbseqStudio(tk.Tk):
     def steps(self):
         s = int(self.slot.get())
         if s not in self.project.sequences:
-            self.project.sequences[s] = [None] * 16
+            self.project.sequences[s] = [None] * MAX_STEPS
         return self.project.sequences[s]
 
     def note_for_index(self, idx: int) -> int:
@@ -391,7 +391,7 @@ class MbseqStudio(tk.Tk):
     def clear_slot(self):
         if messagebox.askyesno('Clear bank', f'Clear pattern bank {self.slot.get()}?'):
             self.push_undo()
-            self.project.sequences[int(self.slot.get())] = [None]*16
+            self.project.sequences[int(self.slot.get())] = [None]*MAX_STEPS
             self.mark_dirty()
             self.cursor.set(0); self.refresh_all()
 
@@ -474,7 +474,7 @@ class MbseqStudio(tk.Tk):
             base = self.file_path.stem if self.file_path else 'mbseq'
             out = Path(folder)
             for bank in range(1, 9):
-                export_midi(out / f'{base}_bank_{bank}.mid', self.project.sequences.get(bank, [None]*16), bpm=self.tempo.get())
+                export_midi(out / f'{base}_bank_{bank}.mid', self.project.sequences.get(bank, [None]*MAX_STEPS), bpm=self.tempo.get())
             messagebox.showinfo('Export complete', f'Exported 8 MIDI files to:\n{folder}')
         except Exception as e:
             messagebox.showerror('MIDI export failed', str(e))

@@ -13,8 +13,11 @@ def test_parse_roundtrip():
     proj = MbseqProject.parse(text)
     # banks 1..8 always present after parse
     assert set(proj.sequences) == set(range(1, 9))
-    assert proj.sequences[1] == [53, 53, 55, None, 60]
-    assert proj.sequences[2] == [60, 60, None, 64]
+    # now padded to 64
+    assert proj.sequences[1][:5] == [53, 53, 55, None, 60]
+    assert len(proj.sequences[1]) == 64
+    assert proj.sequences[2][:4] == [60, 60, None, 64]
+    assert len(proj.sequences[2]) == 64
     # serialize -> parse is stable
     assert MbseqProject.parse(proj.serialize()).sequences == proj.sequences
 
@@ -22,14 +25,16 @@ def test_parse_roundtrip():
 def test_empty_has_eight_banks():
     proj = MbseqProject.empty()
     assert set(proj.sequences) == set(range(1, 9))
-    assert all(steps == [None] * 16 for steps in proj.sequences.values())
+    assert all(steps == [None] * 64 for steps in proj.sequences.values())
 
 
 def test_serialize_always_writes_eight_banks():
     proj = MbseqProject.parse("1:60\n")
     lines = proj.serialize().strip().splitlines()
     assert len(lines) == 8
-    assert lines[0].startswith("1:")
+    assert lines[0].startswith("1:60")
+    # check it padded bank 1 to 64 steps
+    assert len(lines[0].split(":")[1].split()) == 64
 
 
 def test_parse_rejects_bad_note():

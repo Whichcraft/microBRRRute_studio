@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.5.2] - 2026-06-07
+
+### Changed
+- **Standardized to 64 steps per bank** — all pattern banks now consistently
+  default to, and are padded to, 64 steps (the MicroBrute SE hardware limit).
+  This improves compatibility with Arturia's `.mbseq` format and ensures the
+  UI always shows the full grid.
+
 ## [0.5.1] - 2026-06-07
 
 ### Added

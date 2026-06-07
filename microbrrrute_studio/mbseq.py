@@ -10,7 +10,7 @@ class MbseqProject:
     sequences: dict[int, list[int | None]] = field(default_factory=dict)
 
     @classmethod
-    def empty(cls, slots: int = 8, steps: int = 16) -> 'MbseqProject':
+    def empty(cls, slots: int = 8, steps: int = MAX_STEPS) -> 'MbseqProject':
         return cls({i: [None] * steps for i in range(1, slots + 1)})
 
     @classmethod
@@ -41,14 +41,16 @@ class MbseqProject:
                     steps.append(note)
             if len(steps) > MAX_STEPS:
                 raise ValueError(f'Line {lineno}: bank {slot} has {len(steps)} steps; MicroBrute SE allows at most {MAX_STEPS}')
+            # Pad to MAX_STEPS
+            if len(steps) < MAX_STEPS:
+                steps.extend([None] * (MAX_STEPS - len(steps)))
             seqs[slot] = steps
         if not seqs:
             return cls.empty()
         # MicroBrute SE .mbseq files are 8 pattern banks.
-        # Preserve parsed banks exactly, but create empty missing banks so the UI
-        # always exposes banks 1..8 and save never drops them accidentally.
+        # Ensure all banks 1..8 exist and are exactly MAX_STEPS long.
         for slot in range(1, 9):
-            seqs.setdefault(slot, [None] * 16)
+            seqs.setdefault(slot, [None] * MAX_STEPS)
         return cls(dict(sorted(seqs.items())))
 
     @classmethod
@@ -57,10 +59,12 @@ class MbseqProject:
 
     def serialize(self) -> str:
         lines = []
-        # Always write banks 1..8 in Arturia-compatible order.
+        # Always write banks 1..8 in Arturia-compatible order, padded to MAX_STEPS.
         for slot in range(1, 9):
-            self.sequences.setdefault(slot, [None] * 16)
-            tokens = ['x' if n is None else str(n) for n in self.sequences[slot]]
+            steps = self.sequences.get(slot, [None] * MAX_STEPS)
+            if len(steps) < MAX_STEPS:
+                steps = steps + [None] * (MAX_STEPS - len(steps))
+            tokens = ['x' if n is None else str(n) for n in steps]
             lines.append(f'{slot}:{" ".join(tokens)}')
         return '\n'.join(lines) + '\n'
 
