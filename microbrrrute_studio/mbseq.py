@@ -18,17 +18,33 @@ class Step:
 @dataclass
 class MbseqProject:
     sequences: dict[int, list[Step]] = field(default_factory=dict)
+    bank_names: dict[int, str] = field(default_factory=dict)
 
     @classmethod
     def empty(cls, slots: int = 8, steps: int = MAX_STEPS) -> 'MbseqProject':
-        return cls({i: [Step() for _ in range(steps)] for i in range(1, slots + 1)})
+        proj = cls({i: [Step() for _ in range(steps)] for i in range(1, slots + 1)})
+        proj.bank_names = {i: f'Bank {i}' for i in range(1, slots + 1)}
+        return proj
 
     @classmethod
     def parse(cls, text: str) -> 'MbseqProject':
         seqs: dict[int, list[Step]] = {}
+        names: dict[int, str] = {}
         for lineno, raw in enumerate(text.splitlines(), 1):
             line = raw.strip()
             if not line:
+                continue
+            # Parse bank names from comments like "# Name 1: Intro"
+            if line.startswith('# Name '):
+                try:
+                    parts = line[7:].split(':', 1)
+                    if len(parts) == 2:
+                        b_idx = int(parts[0].strip())
+                        names[b_idx] = parts[1].strip()
+                except Exception:
+                    pass
+                continue
+            if line.startswith('#'):
                 continue
             if ':' not in line:
                 raise ValueError(f'Line {lineno}: missing colon')
@@ -60,7 +76,8 @@ class MbseqProject:
         # Ensure all banks 1..8 exist.
         for slot in range(1, 9):
             seqs.setdefault(slot, [Step() for _ in range(MAX_STEPS)])
-        return cls(dict(sorted(seqs.items())))
+            names.setdefault(slot, f'Bank {slot}')
+        return cls(seqs, names)
 
     @classmethod
     def load(cls, path: str | Path) -> 'MbseqProject':
@@ -68,6 +85,11 @@ class MbseqProject:
 
     def serialize(self) -> str:
         lines = []
+        # Write bank names as comments (standardized headers)
+        for slot in range(1, 9):
+            name = self.bank_names.get(slot, f'Bank {slot}')
+            lines.append(f'# Name {slot}: {name}')
+        
         # Always write banks 1..8 in Arturia-compatible order, padded to MAX_STEPS.
         for slot in range(1, 9):
             steps = self.sequences.get(slot, [Step() for _ in range(MAX_STEPS)])

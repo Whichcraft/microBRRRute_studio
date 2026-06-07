@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.10.0] - 2026-06-07
+
+### Added
+- **Visual Piano Roll Editor** — a large interactive canvas for viewing and
+  editing patterns. Click anywhere to place a note across the full hardware
+  range (C0–C8). Syncs in real-time with the step grid and playback.
+- **Musical Pattern Randomizer** — generate coherent, scale-aware sequences.
+  Includes support for Major, Minor, Pentatonic, Blues, and Phrygian scales.
+- **Bank Naming** — give each of the 8 pattern banks a custom descriptive name.
+  Names are persisted in `.mbseq` files as standardized comment headers.
+- **Toolbar Theme Toggle** — quickly switch between Light and Dark modes using
+  the new persistent toggle in the main toolbar.
+
+### Changed
+- **Responsive Layout** — implemented a `PanedWindow` to allow users to resize
+  the relative space between the step grid and the piano roll.
+
 ## [0.9.1] - 2026-06-07
 
 ### Added

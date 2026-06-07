@@ -35,12 +35,20 @@ Every version bump merged to `main` is built and published automatically by CI.
 
 ## ✨ Features
 
-- **All 8 pattern banks**, always visible and preserved on load/save — switch
-  banks with the `1`–`8` selector.
+- **Visual Piano Roll Editor.** An interactive canvas for viewing and editing
+  patterns across the full MicroBrute range (C0–C8). Click anywhere to place a
+  note; it syncs perfectly with the step grid and playhead.
+- **Musical Pattern Randomizer.** Generate coherent sequences within specific
+  scales (Major, Minor, Pentatonic, Blues, etc.). Control root note, octave
+  range, and density.
+- **All 8 pattern banks with Custom Naming.** Switch between banks and give
+  them descriptive names (e.g. "Intro", "Verse"). Names are saved directly in
+  the `.mbseq` file.
 - **On-screen 25-key MicroBrute keyboard.** Click to insert + audition a note,
   right-click to preview without editing, or play from your computer keyboard
   (`A W S E D F T G Y H U J K …`).
-- **Visual Feedback.** Keys light up in real-time during playback.
+- **Visual Feedback.** Keys light up and the piano roll highlights in real-time
+  during playback.
 - **Built-in software synth** with selectable oscillator
   (square / saw / triangle / sine), volume control and octave shift.
 - **Reliable transport.**
@@ -62,14 +70,14 @@ Every version bump merged to `main` is built and published automatically by CI.
     toggle between 1/8 and 1/16 note resolutions.
   - Add / delete steps, insert rests (`R`).
   - **Undo / redo** (`Ctrl+Z` / `Ctrl+Y`) across every edit.
-- **Dark Mode.** High-contrast dark theme for low-light sessions.
+- **Dark Mode.** High-contrast dark theme accessible via a toolbar toggle.
 - **Recent files menu.** Quick access to your 10 most recently used files.
 - **Raw text view.** Edit the underlying `.mbseq` text directly with validation.
 - **Import & export.** Import MIDI; export bank/song as MIDI; bounce bank to **WAV**.
   (Anti-click protection and expressive rendering included).
-
 - **Unsaved-changes guard.** Title bar shows `*` and app warns before quitting.
 - **Tooltips.** Hover over any button for help.
+
 
 ---
 
