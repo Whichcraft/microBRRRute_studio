@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.11.1] - 2026-06-07
+
+### Changed
+- Hardened the release pruning logic to ensure all old releases and orphaned
+  tags are removed before a new release is published.
+
 ## [0.11.0] - 2026-06-07
 
 ### Added

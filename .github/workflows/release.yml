@@ -107,10 +107,20 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Delete all existing releases and their associated tags
-          for tag in $(gh release list --limit 100 | cut -f 1); do
-            echo "Deleting release and tag: $tag"
-            gh release delete "$tag" --yes --cleanup-tag
+          echo "Pruning existing releases..."
+          # Get list of all releases
+          RELEASES=$(gh release list --limit 1000 | cut -f 1)
+          for tag in $RELEASES; do
+            echo "Deleting release: $tag"
+            gh release delete "$tag" --yes --cleanup-tag || echo "Failed to delete release/tag $tag (it might be gone already)"
+          done
+          # Extra safety: delete any orphaned tags that might be left
+          TAGS=$(git tag)
+          for tag in $TAGS; do
+            if [[ "$tag" != "${{ needs.version.outputs.tag }}" ]]; then
+              echo "Deleting orphaned tag: $tag"
+              git push --delete origin "$tag" || true
+            fi
           done
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2

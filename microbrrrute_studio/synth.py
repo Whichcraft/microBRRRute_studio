@@ -79,29 +79,33 @@ def _osc_sample(phase: float, wave_shape: str) -> float:
 
 def render_steps_to_data(steps: list[Step], bpm: int = 120,
                         wave_shape: str = 'square', volume: float = 0.25,
+                        attack: float = 0.005, decay: float = 0.1, sustain: float = 0.5, release: float = 0.05,
                         sample_rate: int = 44100, metronome: bool = False) -> bytes:
     """Render a step list to raw PCM data bytes.
     
-    Includes anti-click fades, per-step gate/accent, and optional metronome clicks.
+    Includes anti-click fades, per-step gate/accent, ADSR envelope, and optional metronome clicks.
     """
     step_secs = 60.0 / max(1, bpm) / 2
     step_frames = max(1, int(step_secs * sample_rate))
     click_amp = int(32767 * 0.3)
-    attack = max(1, int(0.005 * sample_rate))  # 5ms attack
-    release = max(1, int(0.005 * sample_rate)) # 5ms release
+    
+    # Global ADSR frames
+    a_f = max(1, int(attack * sample_rate))
+    d_f = max(1, int(decay * sample_rate))
+    r_f = max(1, int(release * sample_rate))
     
     all_frames = bytearray()
     for idx, s in enumerate(steps):
         frames = [0.0] * step_frames
         
-        # Add metronome click if enabled
+        # Metronome click
         if metronome:
             is_beat = (idx % 2 == 0)
             f = midi_freq(84 if is_beat else 72)
             click_len = int(0.02 * sample_rate)
             for i in range(min(click_len, step_frames)):
                 phase = (f * (i / sample_rate)) % 1.0
-                env = 1.0 - (i / click_len) # simple decay
+                env = 1.0 - (i / click_len)
                 frames[i] += math.sin(2 * math.pi * phase) * 0.4 * env
 
         if s.note is not None:
@@ -110,29 +114,32 @@ def render_steps_to_data(steps: list[Step], bpm: int = 120,
             step_amp = volume * 1.5 if s.accent else volume
             amp_scaled = int(32767 * max(0.0, min(step_amp, 1.0)))
             
-            # Check for slide/legato to the NEXT note
             has_slide = s.slide and (idx + 1 < len(steps)) and (steps[idx+1].note is not None)
-            
-            # If sliding, we extend the note to the full step duration
             render_until = step_frames if has_slide else note_frames
             
             for i in range(render_until):
                 phase = (freq * (i / sample_rate)) % 1.0
                 val = _osc_sample(phase, wave_shape)
+                
+                # ADSR Logic
                 env = 1.0
-                if i < attack:
-                    env = i / attack
-                elif not has_slide and i > note_frames - release:
-                    # Only fade out if NOT sliding to next note
-                    env = (note_frames - i) / release
+                if i < a_f:
+                    env = i / a_f
+                elif i < a_f + d_f:
+                    env = 1.0 - (1.0 - sustain) * ((i - a_f) / d_f)
+                else:
+                    env = sustain
+                
+                # Release phase (only if not sliding)
+                if not has_slide and i > note_frames - r_f:
+                    env = min(env, sustain * (note_frames - i) / r_f)
+                
                 frames[i] += val * env
 
-            # Pack frames with step-specific amplitude
             for f in frames:
                 v = max(-1.0, min(1.0, f))
                 all_frames += struct.pack('<h', int(v * amp_scaled if s.note is not None else v * click_amp))
         else:
-            # Silent step (rest)
             for f in frames:
                 v = max(-1.0, min(1.0, f))
                 all_frames += struct.pack('<h', int(v * click_amp))
