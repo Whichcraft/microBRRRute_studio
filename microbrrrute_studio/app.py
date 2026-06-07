@@ -77,6 +77,8 @@ class MbseqStudio(tk.Tk):
         self.step_res = tk.StringVar(value='1/8')
         self.bank_length = tk.IntVar(value=MAX_STEPS)
         self.playing = False
+        
+        self._load_settings()
         self.dirty = False
         self._undo: list[dict[int, list[int | None]]] = []
         self._redo: list[dict[int, list[int | None]]] = []
@@ -220,10 +222,10 @@ class MbseqStudio(tk.Tk):
         ToolTip(b, 'Copy this bank to another slot')
         b = ttk.Button(edit, text='Copy Bank', command=self.copy_bank)
         b.pack(side='left', padx=3)
-        ToolTip(b, 'Copy bank text to clipboard (Ctrl+C)')
+        ToolTip(b, 'Copy whole bank text to clipboard (Ctrl+Shift+C)')
         b = ttk.Button(edit, text='Paste Bank', command=self.paste_bank)
         b.pack(side='left', padx=3)
-        ToolTip(b, 'Paste bank text from clipboard (Ctrl+V)')
+        ToolTip(b, 'Paste whole bank text from clipboard (Ctrl+Shift+V)')
         ttk.Label(edit, text='Transpose').pack(side='left', padx=(14,3))
         b1 = ttk.Button(edit, text='-12', width=4, command=lambda: self.transpose_bank(-12))
         b1.pack(side='left')
@@ -253,7 +255,7 @@ class MbseqStudio(tk.Tk):
 
         kb_wrap = ttk.Frame(self, padding=8)
         kb_wrap.pack(fill='x')
-        ttk.Label(kb_wrap, text='MicroBrute 25-key composer: click key = insert/play, right-click = preview. PC keys A W S E D F T G Y H U J K ... | Space = Play/Stop, R = rest, Esc = stop, Ctrl+Z/Y = undo/redo').pack(anchor='w')
+        ttk.Label(kb_wrap, text='MicroBrute 25-key composer: click key = insert/play, right-click = preview. PC keys A W S E D F T G Y H U J K ... | Space = Play/Stop, R = rest, Esc = stop, Ctrl+Z/Y = undo/redo, Ctrl+C/V = copy/paste step, Ctrl+Shift+C/V = bank').pack(anchor='w')
         self.keyboard = tk.Canvas(kb_wrap, width=1030, height=210, bg='#666666', highlightthickness=0)
         self.keyboard.pack(fill='x', pady=6)
 
@@ -291,11 +293,16 @@ class MbseqStudio(tk.Tk):
         em.add_command(label='Undo', accelerator='Ctrl+Z', command=self.undo)
         em.add_command(label='Redo', accelerator='Ctrl+Y', command=self.redo)
         em.add_separator()
-        em.add_command(label='Copy Bank', accelerator='Ctrl+C', command=self.copy_bank)
-        em.add_command(label='Paste Bank', accelerator='Ctrl+V', command=self.paste_bank)
+        em.add_command(label='Copy Step', accelerator='Ctrl+C', command=self.copy_step)
+        em.add_command(label='Paste Step', accelerator='Ctrl+V', command=self.paste_step)
+        em.add_separator()
+        em.add_command(label='Copy Whole Bank', accelerator='Ctrl+Shift+C', command=self.copy_bank)
+        em.add_command(label='Paste Whole Bank', accelerator='Ctrl+Shift+V', command=self.paste_bank)
         m.add_cascade(label='Edit', menu=em)
         vm = tk.Menu(m, tearoff=False)
         vm.add_checkbutton(label='Dark Mode', variable=self.dark_mode, command=self.toggle_theme)
+        vm.add_separator()
+        vm.add_command(label='Settings...', command=self.show_settings_dialog)
         m.add_cascade(label='View', menu=vm)
         self.config(menu=m)
 
@@ -307,8 +314,10 @@ class MbseqStudio(tk.Tk):
         self.bind('<Control-z>', lambda e: self.undo())
         self.bind('<Control-y>', lambda e: self.redo())
         self.bind('<Control-Z>', lambda e: self.redo())      # Ctrl+Shift+Z
-        self.bind('<Control-c>', lambda e: self.copy_bank())
-        self.bind('<Control-v>', lambda e: self.paste_bank())
+        self.bind('<Control-c>', lambda e: self.copy_step())
+        self.bind('<Control-v>', lambda e: self.paste_step())
+        self.bind('<Control-C>', lambda e: self.copy_bank()) # Ctrl+Shift+C
+        self.bind('<Control-V>', lambda e: self.paste_bank()) # Ctrl+Shift+V
         self.bind('<Left>', lambda e: self.move_cursor(-1))
         self.bind('<Right>', lambda e: self.move_cursor(1))
         for idx, key in enumerate(PC_KEYS[:25]):
@@ -358,6 +367,7 @@ class MbseqStudio(tk.Tk):
             style.configure('TLabelframe', background='#f0f0f0', foreground='#000000')
             style.configure('TLabelframe.Label', background='#f0f0f0', foreground='#000000')
             self.raw.configure(bg='#ffffff', fg='#000000', insertbackground='black')
+        self._save_settings()
         self.refresh_all()
 
     def refresh_all(self) -> None:
@@ -368,6 +378,40 @@ class MbseqStudio(tk.Tk):
 
     def _recent_config_path(self) -> Path:
         return Path.home() / '.microbrrrute_studio_recent.json'
+
+    def _settings_path(self) -> Path:
+        return Path.home() / '.microbrrrute_studio_settings.json'
+
+    def _load_settings(self) -> None:
+        p = self._settings_path()
+        if p.exists():
+            try:
+                data = json.loads(p.read_text(encoding='utf-8'))
+                if 'volume' in data:
+                    self.volume.set(data['volume'])
+                if 'tempo' in data:
+                    self.tempo.set(data['tempo'])
+                if 'dark_mode' in data:
+                    self.dark_mode.set(data['dark_mode'])
+                if 'wave_shape' in data:
+                    self.wave_shape.set(data['wave_shape'])
+                if 'step_res' in data:
+                    self.step_res.set(data['step_res'])
+            except Exception:
+                pass
+
+    def _save_settings(self) -> None:
+        try:
+            data = {
+                'volume': self.volume.get(),
+                'tempo': self.tempo.get(),
+                'dark_mode': self.dark_mode.get(),
+                'wave_shape': self.wave_shape.get(),
+                'step_res': self.step_res.get(),
+            }
+            self._settings_path().write_text(json.dumps(data), encoding='utf-8')
+        except Exception:
+            pass
 
     def _load_recent(self) -> list[str]:
         p = self._recent_config_path()
@@ -429,6 +473,27 @@ class MbseqStudio(tk.Tk):
         name = self.file_path.name if self.file_path else 'untitled'
         self.title(f'{"*" if self.dirty else ""}{name} - microBRRRute Studio')
 
+    def show_settings_dialog(self) -> None:
+        win = tk.Toplevel(self)
+        win.title('App Settings')
+        win.geometry('300x250')
+        win.resizable(False, False)
+        win.transient(self)
+        win.grab_set()
+
+        f = ttk.Frame(win, padding=20)
+        f.pack(fill='both', expand=True)
+
+        ttk.Checkbutton(f, text='Dark Mode', variable=self.dark_mode, command=self.toggle_theme).pack(anchor='w', pady=5)
+        
+        ttk.Label(f, text='Default Volume').pack(anchor='w', pady=(10,0))
+        ttk.Scale(f, from_=0.0, to=0.8, variable=self.volume, orient='horizontal').pack(fill='x', pady=5)
+
+        ttk.Label(f, text='Default Tempo (BPM)').pack(anchor='w', pady=(10,0))
+        ttk.Spinbox(f, from_=30, to=300, textvariable=self.tempo).pack(anchor='w', pady=5)
+
+        ttk.Button(f, text='Close', command=win.destroy).pack(side='bottom', pady=(20,0))
+
     def mark_dirty(self):
         self.dirty = True
 
@@ -459,13 +524,66 @@ class MbseqStudio(tk.Tk):
         self.mark_dirty()
         self.refresh_all()
 
-    def copy_bank(self):
+    def copy_step(self) -> None:
+        idx = self.cursor.get()
+        steps = self.steps()
+        if idx < len(steps):
+            val = steps[idx]
+            text = 'x' if val is None else str(val)
+            self.clipboard_clear()
+            self.clipboard_append(text)
+            self.status.config(text=f'Step {idx+1} ({text}) copied to clipboard.')
+
+    def paste_step(self) -> None:
+        try:
+            text = self.clipboard_get().strip()
+        except tk.TclError:
+            return
+
+        # If it's a single token, paste to step. If multiple, maybe it's a bank?
+        # For simplicity, if it's one token, we paste to current step.
+        tokens = text.split()
+        if not tokens:
+            return
+
+        if len(tokens) > 1:
+            # Fallback to bank paste if user pressed Ctrl+V with a bank in clipboard
+            return self.paste_bank()
+
+        t = tokens[0]
+        val: int | None = None
+        if t.lower() == 'x':
+            val = None
+        else:
+            try:
+                n = int(t)
+                if 0 <= n <= 127:
+                    val = n
+                else:
+                    raise ValueError()
+            except ValueError:
+                return
+
+        self.push_undo()
+        steps = self.steps()
+        idx = self.cursor.get()
+        if idx >= len(steps):
+            steps.append(val)
+        else:
+            steps[idx] = val
+        self.mark_dirty()
+        self.refresh_grid()
+        self.refresh_raw()
+        self.status.config(text=f'Pasted {t} into step {idx+1}.')
+
+    def copy_bank(self) -> None:
         steps = self.steps()
         tokens = ['x' if n is None else str(n) for n in steps]
         text = ' '.join(tokens)
         self.clipboard_clear()
         self.clipboard_append(text)
-        self.status.config(text=f'Bank {self.slot.get()} copied to clipboard.')
+        self.status.config(text=f'Whole Bank {self.slot.get()} copied to clipboard.')
+
 
     def paste_bank(self):
         try:
@@ -558,9 +676,11 @@ class MbseqStudio(tk.Tk):
         except Exception as e:
             messagebox.showerror('WAV export failed', str(e))
 
-    def on_close(self):
+    def on_close(self) -> None:
         self.stop_sequence()
+        self._save_settings()
         if self.dirty and not messagebox.askokcancel('Unsaved changes',
+
                 'You have unsaved changes. Quit without saving?'):
             return
         self.destroy()
@@ -635,16 +755,34 @@ class MbseqStudio(tk.Tk):
     def _on_drag_start(self, idx: int):
         self._drag_idx = idx
 
-    def _on_drag_motion(self, event):
-        # We don't need to do much during motion, but we could highlight the target
-        pass
-
-    def _on_drag_stop(self, event, src_idx: int):
+    def _on_drag_motion(self, event: tk.Event) -> None:
         if self._drag_idx is None:
             return
-        
+
         # Identify the widget under the mouse
         target = event.widget.winfo_containing(event.x_root, event.y_root)
+
+        # Reset all button borders/highlights
+        for btn in self.step_buttons:
+            btn.config(highlightbackground='SystemButtonFace' if not self.dark_mode.get() else '#2b2b2b', highlightthickness=0)
+
+        # Highlight target
+        for btn in self.step_buttons:
+            if btn == target:
+                btn.config(highlightbackground='#7CFC8A', highlightthickness=2)
+                break
+
+    def _on_drag_stop(self, event: tk.Event, src_idx: int) -> None:
+        if self._drag_idx is None:
+            return
+
+        # Reset highlights
+        for btn in self.step_buttons:
+            btn.config(highlightthickness=0)
+
+        # Identify the widget under the mouse
+        target = event.widget.winfo_containing(event.x_root, event.y_root)
+
         dst_idx = None
         
         # Check if the target is one of our step buttons

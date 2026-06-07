@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.9.0] - 2026-06-07
+
+### Added
+- **Persistent App Settings** — a new settings dialog (View menu) allows you to
+  persist your volume, tempo, theme, and resolution preferences across app
+  restarts in `~/.microbrrrute_studio_settings.json`.
+- **Granular Copy/Paste** — `Ctrl+C` and `Ctrl+V` now copy and paste individual
+  steps, while `Ctrl+Shift+C/V` handles whole banks.
+- **Enhanced Drag-and-Drop** — added real-time visual feedback when reordering
+  steps on the grid.
+
+### Changed
+- **CI Build Verification** — every CI run now performs a test build with
+  PyInstaller to ensure build stability across all platforms.
+
 ## [0.8.6] - 2026-06-07
 
 ### Fixed
