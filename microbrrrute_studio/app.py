@@ -157,9 +157,6 @@ class MbseqStudio(tk.Tk):
         self.play_btn = ttk.Button(top, text='▶ Play Bank', command=self.play_sequence)
         self.play_btn.pack(side='left')
         ToolTip(self.play_btn, 'Play the currently selected bank (Space)')
-        b = ttk.Button(top, text='▶▶ Play All', command=self.play_all_banks)
-        b.pack(side='left', padx=3)
-        ToolTip(b, 'Play all non-empty banks in sequence')
         self.stop_btn = ttk.Button(top, text='■ Stop', command=self.stop_sequence, state='disabled')
         self.stop_btn.pack(side='left', padx=3)
         ToolTip(self.stop_btn, 'Stop playback immediately (Esc)')
@@ -665,9 +662,11 @@ class MbseqStudio(tk.Tk):
             return
         rect = self.key_rects[note]
         # Determine original color
-        off = (note - self.root_note - self.octave_shift.get()*12) % 24
-        orig = 'black' if off in BLACK_OFFSETS else 'white'
-        self.keyboard.itemconfig(rect, fill='#7CFC8A')  # same green as playhead
+        # The scale repeats every 24 keys in the canvas (2 octaves), 
+        # but offsets are absolute from root.
+        rel = note - (self.root_note + self.octave_shift.get()*12)
+        orig = 'black' if rel in BLACK_OFFSETS else 'white'
+        self.keyboard.itemconfig(rect, fill='#7CFC8A')  # green highlight
         self.after(200, lambda: self.keyboard.itemconfig(rect, fill=orig))
 
     def insert_note(self, note:int):
@@ -843,39 +842,29 @@ class MbseqStudio(tk.Tk):
 
     def play_sequence(self):
         self.stop_sequence()
+        # Always only play the selected bank
         self._play_banks = [int(self.slot.get())]
         self._start_playback()
 
-    def play_all_banks(self):
-        self.stop_sequence()
-        banks = [b for b in range(1, 9) if any(n is not None for n in self.project.sequences.get(b, []))]
-        if not banks:
-            messagebox.showinfo('Play All', 'All banks are empty.')
-            return
-        self._play_banks = banks
-        self._start_playback()
-
     def _start_playback(self):
-        if not any(self.project.sequences.get(b) for b in self._play_banks):
-            messagebox.showinfo('Play', 'Nothing to play (no steps).')
+        bank = self._play_banks[0]
+        steps = self.project.sequences.get(bank, [None]*MAX_STEPS)
+        if not any(n is not None for n in steps):
+            messagebox.showinfo('Play', f'Bank {bank} is empty.')
             return
+
         self.playing = True
         self._play_idx = 0
-        self.slot.set(self._play_banks[0])
         if self.play_btn: self.play_btn.config(state='disabled')
         if self.stop_btn: self.stop_btn.config(state='normal')
         self.refresh_all()
-        
-        # Pre-render the entire sequence to a temp WAV for rock-solid timing
-        all_steps = []
-        for b in self._play_banks:
-            all_steps.extend(self.project.sequences.get(b, [None]*MAX_STEPS))
-        
-        data = render_steps_to_data(all_steps, bpm=self.tempo.get(),
+
+        # Pre-render ONLY the current bank for rock-solid timing
+        data = render_steps_to_data(steps, bpm=self.tempo.get(),
                                    wave_shape=self.wave_shape.get(),
                                    volume=self.volume.get(),
                                    metronome=self.metronome.get())
-        
+
         self._pre_render_file = Path(tempfile.gettempdir()) / f'mbseq_render_{uuid.uuid4().hex}.wav'
         render_pre_rendered_wav(self._pre_render_file, data)
 
@@ -883,7 +872,6 @@ class MbseqStudio(tk.Tk):
             self._play_count_in(8)  # 4 beats = 8 steps
         else:
             self._start_audio_and_tick()
-
     def _start_audio_and_tick(self):
         if not self.playing or not self._pre_render_file: return
         play_pre_rendered_wav(self._pre_render_file)
@@ -920,20 +908,8 @@ class MbseqStudio(tk.Tk):
 
     def _advance_bank(self):
         """Reached the end of the current bank's steps; move on or stop."""
-        current = int(self.slot.get())
-        order = self._play_banks
-        pos = order.index(current) if current in order else 0
-        if pos + 1 < len(order):
-            next_bank = order[pos + 1]         # next bank in the queue
-            self.slot.set(next_bank)
-            self._play_idx = 0
-            self._playhead = -1
-            self.refresh_all()
-            # The pre-rendered audio continues playing, we just sync the tick
-            self._after_id = self.after(1, self._play_tick)
-        elif self.loop.get():
+        if self.loop.get():
             # Restart pre-rendered audio for looping
-            self.slot.set(order[0])
             self._play_idx = 0
             self._playhead = -1
             self.refresh_all()

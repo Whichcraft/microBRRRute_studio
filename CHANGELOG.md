@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.7.2] - 2026-06-07
+
+### Removed
+- Removed the "Play All" feature; the app now exclusively plays the currently
+  selected pattern bank, aligning with the hardware sequencer's behavior.
+
+### Fixed
+- Fixed keyboard visual feedback: black keys no longer "white out" after being
+  played; they now correctly return to their original black color.
+
 ## [0.7.1] - 2026-06-07
 
 ### Added
