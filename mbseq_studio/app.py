@@ -136,7 +136,12 @@ class MbseqStudio(tk.Tk):
         self.bind('<Left>', lambda e: self.move_cursor(-1))
         self.bind('<Right>', lambda e: self.move_cursor(1))
         for idx, key in enumerate(PC_KEYS[:25]):
-            self.bind(key, lambda e, i=idx: self.insert_note(self.note_for_index(i)))
+            # Tkinter's bind() only accepts ASCII key chars; skip any that don't
+            # (e.g. 'ö') rather than crashing on startup.
+            try:
+                self.bind(key, lambda e, i=idx: self.insert_note(self.note_for_index(i)))
+            except tk.TclError:
+                pass
 
     def steps(self):
         s = int(self.slot.get())
