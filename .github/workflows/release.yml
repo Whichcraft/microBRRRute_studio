@@ -95,6 +95,16 @@ jobs:
           merge-multiple: true
       - name: List artifacts
         run: ls -R artifacts
+      - name: Prune old releases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Delete all existing releases and their associated tags
+          for tag in $(gh release list --limit 100 | cut -f 1); do
+            echo "Deleting release and tag: $tag"
+            gh release delete "$tag" --yes --cleanup-tag
+          done
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:

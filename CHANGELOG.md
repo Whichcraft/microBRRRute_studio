@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.7.7] - 2026-06-07
+
+### Changed
+- Updated release workflow to automatically prune all old GitHub Releases and
+  tags before publishing a new one. This ensures that the Releases section
+  always only contains the latest stable version.
+
 ## [0.7.6] - 2026-06-07
 
 ### Fixed
