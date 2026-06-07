@@ -48,13 +48,13 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            artifact: microBRRRute_Studio-windows-x64.exe
+            artifact: microBRRRute_Studio-windows-x64.zip
             built: dist/microBRRRute_Studio.exe
           - os: ubuntu-latest
-            artifact: microBRRRute_Studio-linux-x64
+            artifact: microBRRRute_Studio-linux-x64.zip
             built: dist/microBRRRute_Studio
           - os: macos-latest
-            artifact: microBRRRute_Studio-macos-x64
+            artifact: microBRRRute_Studio-macos-x64.zip
             built: dist/microBRRRute_Studio
     runs-on: ${{ matrix.os }}
     steps:
@@ -73,15 +73,22 @@ jobs:
         run: python -m PyInstaller --noconfirm microBRRRute_Studio.spec
       - name: List build output
         run: ls -R dist/
-      - name: Stage artifact
+      - name: Stage and Compress artifact
         shell: bash
         run: |
-          mkdir -p out
-          cp "${{ matrix.built }}" "out/${{ matrix.artifact }}"
+          mkdir -p staging
+          cp "${{ matrix.built }}" staging/
+          cp around_the_world.mbseq staging/
+          cd staging
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            7z a "../${{ matrix.artifact }}" *
+          else
+            zip -r "../${{ matrix.artifact }}" *
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: out/${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
           if-no-files-found: error
 
   release:

@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.8.2] - 2026-06-07
+
+### Added
+- **Bundled Release Archives** — releases now deliver a compressed `.zip` archive
+  containing both the standalone executable and the `around_the_world.mbseq`
+  example project for each platform.
+
 ## [0.8.1] - 2026-06-07
 
 ### Changed
