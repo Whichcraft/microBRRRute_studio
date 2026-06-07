@@ -14,7 +14,6 @@ Proposed improvements, roughly ordered by value. Done items move to
 - [ ] Anti-click: short crossfade between consecutive notes.
 
 ## Editing & workflow
-- [ ] Copy / paste steps and ranges between banks.
 - [ ] Click-and-drag to reorder steps.
 - [ ] **Count-in** option.
 - [ ] Configurable steps-per-bank and time signature (eighths vs sixteenths).

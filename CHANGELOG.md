@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.5.9] - 2026-06-07
+
+### Added
+- **Copy / paste banks** — copy a whole pattern bank to the system clipboard and
+  paste it back into any bank (or an external text editor) using `Ctrl+C` and
+  `Ctrl+V`. Added dedicated buttons to the Edit toolbar.
+
 ## [0.5.8] - 2026-06-07
 
 ### Changed

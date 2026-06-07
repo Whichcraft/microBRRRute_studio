@@ -88,6 +88,8 @@ class MbseqStudio(tk.Tk):
         ttk.Button(edit, text='Rest at Cursor', command=self.insert_rest).pack(side='left', padx=3)
         ttk.Button(edit, text='Clear Bank', command=self.clear_slot).pack(side='left', padx=10)
         ttk.Button(edit, text='Duplicate Bank To...', command=self.duplicate_bank_dialog).pack(side='left', padx=3)
+        ttk.Button(edit, text='Copy Bank', command=self.copy_bank).pack(side='left', padx=3)
+        ttk.Button(edit, text='Paste Bank', command=self.paste_bank).pack(side='left', padx=3)
         ttk.Label(edit, text='Transpose').pack(side='left', padx=(14,3))
         ttk.Button(edit, text='-12', width=4, command=lambda: self.transpose_bank(-12)).pack(side='left')
         ttk.Button(edit, text='-1', width=4, command=lambda: self.transpose_bank(-1)).pack(side='left')
@@ -146,6 +148,9 @@ class MbseqStudio(tk.Tk):
         em = tk.Menu(m, tearoff=False)
         em.add_command(label='Undo', accelerator='Ctrl+Z', command=self.undo)
         em.add_command(label='Redo', accelerator='Ctrl+Y', command=self.redo)
+        em.add_separator()
+        em.add_command(label='Copy Bank', accelerator='Ctrl+C', command=self.copy_bank)
+        em.add_command(label='Paste Bank', accelerator='Ctrl+V', command=self.paste_bank)
         m.add_cascade(label='Edit', menu=em)
         self.config(menu=m)
 
@@ -157,6 +162,8 @@ class MbseqStudio(tk.Tk):
         self.bind('<Control-z>', lambda e: self.undo())
         self.bind('<Control-y>', lambda e: self.redo())
         self.bind('<Control-Z>', lambda e: self.redo())      # Ctrl+Shift+Z
+        self.bind('<Control-c>', lambda e: self.copy_bank())
+        self.bind('<Control-v>', lambda e: self.paste_bank())
         self.bind('<Left>', lambda e: self.move_cursor(-1))
         self.bind('<Right>', lambda e: self.move_cursor(1))
         for idx, key in enumerate(PC_KEYS[:25]):
@@ -223,6 +230,49 @@ class MbseqStudio(tk.Tk):
         self.project.sequences = self._redo.pop()
         self.mark_dirty()
         self.refresh_all()
+
+    def copy_bank(self):
+        steps = self.steps()
+        tokens = ['x' if n is None else str(n) for n in steps]
+        text = ' '.join(tokens)
+        self.clipboard_clear()
+        self.clipboard_append(text)
+        self.status.config(text=f'Bank {self.slot.get()} copied to clipboard.')
+
+    def paste_bank(self):
+        try:
+            text = self.clipboard_get()
+        except tk.TclError:
+            return messagebox.showinfo('Paste Bank', 'Clipboard is empty.')
+        
+        # Simple validation: space-separated notes or 'x'
+        tokens = text.split()
+        if not tokens:
+            return messagebox.showinfo('Paste Bank', 'Clipboard does not contain valid step data.')
+        
+        new_steps = []
+        for t in tokens:
+            if t.lower() == 'x':
+                new_steps.append(None)
+            else:
+                try:
+                    n = int(t)
+                    if 0 <= n <= 127:
+                        new_steps.append(n)
+                    else:
+                        raise ValueError()
+                except ValueError:
+                    return messagebox.showerror('Paste Bank', f'Invalid step data: {t}')
+        
+        if len(new_steps) > MAX_STEPS:
+            messagebox.showinfo('Paste Bank', f'Data has {len(new_steps)} steps; truncated to {MAX_STEPS}.')
+            new_steps = new_steps[:MAX_STEPS]
+        
+        self.push_undo()
+        self.project.sequences[int(self.slot.get())] = new_steps
+        self.mark_dirty()
+        self.refresh_all()
+        self.status.config(text=f'Pasted {len(new_steps)} steps into bank {self.slot.get()}.')
 
     # --- Transpose ----------------------------------------------------------
     def transpose_bank(self, semitones: int):
