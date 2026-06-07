@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.7.8] - 2026-06-07
+
+### Fixed
+- Eliminated UI flickering in the step grid during note entry. The grid now
+  updates existing widgets incrementally instead of recreating them, providing
+  a much smoother composition experience.
+
 ## [0.7.7] - 2026-06-07
 
 ### Changed

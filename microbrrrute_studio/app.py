@@ -568,21 +568,45 @@ class MbseqStudio(tk.Tk):
             self.refresh_grid()
 
     def refresh_grid(self):
-        for w in self.grid_inner.winfo_children(): w.destroy()
-        self.step_buttons.clear()
         steps = self.steps()
         if self.cursor.get() < 0: self.cursor.set(0)
         if self.cursor.get() >= len(steps): self.cursor.set(max(0,len(steps)-1))
-        
+
         # Calculate how many columns can fit
         win_width = self.winfo_width()
         btn_width = 65  # approx width of button + padding
         cols = max(1, (win_width - 40) // btn_width)
-        
+
+        # Ensure we have enough widgets
+        children = self.grid_inner.winfo_children()
+        required_widgets = len(steps) * 2 # Label + Button for each step
+
+        # If structure changed (cols) or count changed, full rebuild is safer/easier
+        # but for simple note updates, we can just update.
+        # We'll store current cols to detect layout changes.
+        if not hasattr(self, '_last_cols') or self._last_cols != cols or len(children) != required_widgets:
+            for w in children: w.destroy()
+            self.step_buttons.clear()
+            self._last_cols = cols
+
+            for i, n in enumerate(steps):
+                row = (i // cols) * 2
+                col = i % cols
+                lbl = ttk.Label(self.grid_inner, text=str(i+1), anchor='center')
+                lbl.grid(row=row, column=col, padx=1)
+
+                b = tk.Button(self.grid_inner, width=7, height=2, highlightthickness=0)
+                b.grid(row=row+1, column=col, padx=1, pady=(0,4))
+                b.bind('<Button-3>', lambda e, x=i: self.set_step_rest(x))
+                b.bind('<ButtonPress-1>', lambda e, x=i: self._on_drag_start(x))
+                b.bind('<B1-Motion>', self._on_drag_motion)
+                b.bind('<ButtonRelease-1>', lambda e, x=i: self._on_drag_stop(e, x))
+                self.step_buttons.append(b)
+
+            children = self.grid_inner.winfo_children()
+
+        # Update existing widgets
         for i, n in enumerate(steps):
-            row = (i // cols) * 2
-            col = i % cols
-            ttk.Label(self.grid_inner, text=str(i+1), anchor='center').grid(row=row, column=col, padx=1)
             txt = 'REST\nx' if n is None else f'{midi_to_name(n)}\n{n}'
             if i == self._playhead:
                 bg = '#7CFC8A'  # green = currently sounding
@@ -593,20 +617,11 @@ class MbseqStudio(tk.Tk):
             else:
                 bg = '#404040' if self.dark_mode.get() else '#ffffff'
                 fg = '#ffffff' if self.dark_mode.get() else '#000000'
-            b = tk.Button(self.grid_inner, text=txt, width=7, height=2, bg=bg, fg=fg,
-                          activebackground=bg, activeforeground=fg, highlightthickness=0,
-                          command=lambda x=i: self.select_step(x))
-            b.grid(row=row+1, column=col, padx=1, pady=(0,4))
-            b.bind('<Button-3>', lambda e, x=i: self.set_step_rest(x))
-            
-            # Drag-and-drop reordering
-            b.bind('<ButtonPress-1>', lambda e, x=i: self._on_drag_start(x))
-            b.bind('<B1-Motion>', self._on_drag_motion)
-            b.bind('<ButtonRelease-1>', lambda e, x=i: self._on_drag_stop(e, x))
-            
-            self.step_buttons.append(b)
-        self.refresh_status()
 
+            btn = self.step_buttons[i]
+            btn.config(text=txt, bg=bg, fg=fg, activebackground=bg, activeforeground=fg, command=lambda x=i: self.select_step(x))
+
+        self.refresh_status()
     def _on_drag_start(self, idx: int):
         self._drag_idx = idx
 
