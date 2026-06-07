@@ -24,6 +24,9 @@ _lock = threading.Lock()
 _active_procs: set[subprocess.Popen] = set()
 
 
+from .mbseq import Step
+
+
 def get_last_audio_error() -> str | None:
     return _last_error
 
@@ -74,23 +77,21 @@ def _osc_sample(phase: float, wave_shape: str) -> float:
     return 1.0 if phase < 0.5 else -1.0
 
 
-def render_steps_to_data(steps: list[int | None], bpm: int = 120,
-                        wave_shape: str = 'square', volume: float = 0.25, gate: float = 0.82,
+def render_steps_to_data(steps: list[Step], bpm: int = 120,
+                        wave_shape: str = 'square', volume: float = 0.25,
                         sample_rate: int = 44100, metronome: bool = False) -> bytes:
     """Render a step list to raw PCM data bytes.
     
-    Includes anti-click fades and optional metronome clicks.
+    Includes anti-click fades, per-step gate/accent, and optional metronome clicks.
     """
     step_secs = 60.0 / max(1, bpm) / 2
     step_frames = max(1, int(step_secs * sample_rate))
-    note_frames = max(1, int(step_frames * gate))
-    amp = int(32767 * max(0.0, min(volume, 1.0)))
     click_amp = int(32767 * 0.3)
     attack = max(1, int(0.005 * sample_rate))  # 5ms attack
     release = max(1, int(0.005 * sample_rate)) # 5ms release
     
     all_frames = bytearray()
-    for idx, note in enumerate(steps):
+    for idx, s in enumerate(steps):
         frames = [0.0] * step_frames
         
         # Add metronome click if enabled
@@ -103,27 +104,43 @@ def render_steps_to_data(steps: list[int | None], bpm: int = 120,
                 env = 1.0 - (i / click_len) # simple decay
                 frames[i] += math.sin(2 * math.pi * phase) * 0.4 * env
 
-        if note is not None:
-            freq = midi_freq(note)
-            for i in range(note_frames):
+        if s.note is not None:
+            freq = midi_freq(s.note)
+            note_frames = max(1, int(step_frames * s.gate))
+            step_amp = volume * 1.5 if s.accent else volume
+            amp_scaled = int(32767 * max(0.0, min(step_amp, 1.0)))
+            
+            # Check for slide/legato to the NEXT note
+            has_slide = s.slide and (idx + 1 < len(steps)) and (steps[idx+1].note is not None)
+            
+            # If sliding, we extend the note to the full step duration
+            render_until = step_frames if has_slide else note_frames
+            
+            for i in range(render_until):
                 phase = (freq * (i / sample_rate)) % 1.0
                 val = _osc_sample(phase, wave_shape)
                 env = 1.0
                 if i < attack:
                     env = i / attack
-                elif i > note_frames - release:
+                elif not has_slide and i > note_frames - release:
+                    # Only fade out if NOT sliding to next note
                     env = (note_frames - i) / release
                 frames[i] += val * env
 
-        # Pack and clip
-        for f in frames:
-            v = max(-1.0, min(1.0, f))
-            all_frames += struct.pack('<h', int(v * amp if note is not None else v * click_amp))
+            # Pack frames with step-specific amplitude
+            for f in frames:
+                v = max(-1.0, min(1.0, f))
+                all_frames += struct.pack('<h', int(v * amp_scaled if s.note is not None else v * click_amp))
+        else:
+            # Silent step (rest)
+            for f in frames:
+                v = max(-1.0, min(1.0, f))
+                all_frames += struct.pack('<h', int(v * click_amp))
             
     return bytes(all_frames)
 
 
-def render_pre_rendered_wav(path: Path, data: bytes, sample_rate: int = 44100):
+def render_pre_rendered_wav(path: Path, data: bytes, sample_rate: int = 44100) -> None:
     with wave.open(str(path), 'wb') as w:
         w.setnchannels(1)
         w.setsampwidth(2)
@@ -131,8 +148,8 @@ def render_pre_rendered_wav(path: Path, data: bytes, sample_rate: int = 44100):
         w.writeframes(data)
 
 
-def render_steps_wav(path: Path | str, steps: list[int | None], bpm: int = 120,
-                     wave_shape: str = 'square', volume: float = 0.25, gate: float = 0.82,
+def render_steps_wav(path: Path | str, steps: list[Step], bpm: int = 120,
+                     wave_shape: str = 'square', volume: float = 0.25,
                      sample_rate: int = 44100) -> None:
     """Bounce a step list to a single WAV file (offline render, no playback).
 

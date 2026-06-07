@@ -11,10 +11,17 @@ _Nothing yet._
 ## [0.9.1] - 2026-06-07
 
 ### Added
+- **Per-step Expressive Attributes** — right-click any step on the grid to set
+  its **Gate Length** (25%–100%), **Accent**, or **Slide/Legato** status.
+- **Upgraded Audio Engine** — the built-in synth now audibly respects per-step
+  attributes, including volume boosts for accents and smooth transitions for
+  slides.
 - **Multi-step Selection** — select multiple steps using `Shift+Click` (range)
   or `Ctrl+Click` (toggle). Batch operations like **Transpose** and **Delete**
   now work on the entire selection.
-- Added "Clear Selection" to the Edit menu.
+- **Range-based Copy/Paste** — copying multiple selected steps now stores a
+  sequence in the clipboard that can be pasted starting at any cursor position.
+- Added visual indicators (• for accent, → for slide) directly on the grid.
 
 ## [0.9.0] - 2026-06-07
 

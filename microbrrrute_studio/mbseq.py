@@ -9,16 +9,23 @@ MIN_PLAYABLE = 12
 MAX_PLAYABLE = 108
 
 @dataclass
+class Step:
+    note: int | None = None
+    gate: float = 0.82  # Default gate length
+    accent: bool = False
+    slide: bool = False
+
+@dataclass
 class MbseqProject:
-    sequences: dict[int, list[int | None]] = field(default_factory=dict)
+    sequences: dict[int, list[Step]] = field(default_factory=dict)
 
     @classmethod
     def empty(cls, slots: int = 8, steps: int = MAX_STEPS) -> 'MbseqProject':
-        return cls({i: [None] * steps for i in range(1, slots + 1)})
+        return cls({i: [Step() for _ in range(steps)] for i in range(1, slots + 1)})
 
     @classmethod
     def parse(cls, text: str) -> 'MbseqProject':
-        seqs: dict[int, list[int | None]] = {}
+        seqs: dict[int, list[Step]] = {}
         for lineno, raw in enumerate(text.splitlines(), 1):
             line = raw.strip()
             if not line:
@@ -30,10 +37,10 @@ class MbseqProject:
                 slot = int(slot_s.strip())
             except ValueError as exc:
                 raise ValueError(f'Line {lineno}: bad slot number') from exc
-            steps: list[int | None] = []
+            steps: list[Step] = []
             for tok in data.split():
                 if tok.lower() == 'x':
-                    steps.append(None)
+                    steps.append(Step(note=None))
                 else:
                     try:
                         note = int(tok)
@@ -41,19 +48,18 @@ class MbseqProject:
                         raise ValueError(f'Line {lineno}: bad token {tok!r}') from exc
                     if note < 0 or note > 127:
                         raise ValueError(f'Line {lineno}: MIDI note out of range: {note}')
-                    steps.append(note)
+                    steps.append(Step(note=note))
             if len(steps) > MAX_STEPS:
                 raise ValueError(f'Line {lineno}: bank {slot} has {len(steps)} steps; MicroBrute SE allows at most {MAX_STEPS}')
             # Pad to MAX_STEPS
             if len(steps) < MAX_STEPS:
-                steps.extend([None] * (MAX_STEPS - len(steps)))
+                steps.extend([Step() for _ in range(MAX_STEPS - len(steps))])
             seqs[slot] = steps
         if not seqs:
             return cls.empty()
-        # MicroBrute SE .mbseq files are 8 pattern banks.
-        # Ensure all banks 1..8 exist and are exactly MAX_STEPS long.
+        # Ensure all banks 1..8 exist.
         for slot in range(1, 9):
-            seqs.setdefault(slot, [None] * MAX_STEPS)
+            seqs.setdefault(slot, [Step() for _ in range(MAX_STEPS)])
         return cls(dict(sorted(seqs.items())))
 
     @classmethod
@@ -64,27 +70,28 @@ class MbseqProject:
         lines = []
         # Always write banks 1..8 in Arturia-compatible order, padded to MAX_STEPS.
         for slot in range(1, 9):
-            steps = self.sequences.get(slot, [None] * MAX_STEPS)
+            steps = self.sequences.get(slot, [Step() for _ in range(MAX_STEPS)])
             if len(steps) < MAX_STEPS:
-                steps = steps + [None] * (MAX_STEPS - len(steps))
-            tokens = ['x' if n is None else str(n) for n in steps]
+                steps = steps + [Step() for _ in range(MAX_STEPS - len(steps))]
+            tokens = ['x' if s.note is None else str(s.note) for s in steps]
             lines.append(f'{slot}:{" ".join(tokens)}')
         return '\n'.join(lines) + '\n'
 
     def save(self, path: str | Path) -> None:
         Path(path).write_text(self.serialize(), encoding='utf-8', newline='\n')
 
-def transpose_steps(steps: list[int | None], semitones: int) -> list[int | None]:
+def transpose_steps(steps: list[Step], semitones: int) -> list[Step]:
     """Transpose notes by `semitones`, leaving rests untouched.
 
     Notes that would fall outside the MIDI range 0..127 are clamped.
     """
-    out: list[int | None] = []
-    for n in steps:
-        if n is None:
-            out.append(None)
+    out: list[Step] = []
+    for s in steps:
+        if s.note is None:
+            out.append(s)
         else:
-            out.append(max(0, min(127, n + semitones)))
+            new_note = max(0, min(127, s.note + semitones))
+            out.append(Step(note=new_note, gate=s.gate, accent=s.accent, slide=s.slide))
     return out
 
 

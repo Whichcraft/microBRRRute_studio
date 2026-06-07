@@ -51,17 +51,23 @@ Every version bump merged to `main` is built and published automatically by CI.
   - A green **playhead** highlights the sounding step.
 - **App Icon.** Official 🎹 icon visible in the title bar and taskbar.
 - **Powerful step editor.**
-
   - **Click-and-drag reordering** — move steps by dragging them on the grid.
+  - **Multi-step Selection** — select ranges using `Shift+Click` or multiple steps
+    via `Ctrl+Click`.
+  - **Batch Operations** — transpose or delete the entire selection at once.
+  - **Per-step Attributes** — right-click a step to set its **Gate Length**,
+    **Accent**, or **Slide/Legato** status. Visual indicators (• for accent,
+    → for slide) show directly on the grid.
   - **Configurable Bank Settings** — set the active bank length (1–64) and
     toggle between 1/8 and 1/16 note resolutions.
-  - Add / delete steps, insert rests (`R`), transpose a bank by semitone/octave.
+  - Add / delete steps, insert rests (`R`).
   - **Undo / redo** (`Ctrl+Z` / `Ctrl+Y`) across every edit.
 - **Dark Mode.** High-contrast dark theme for low-light sessions.
 - **Recent files menu.** Quick access to your 10 most recently used files.
 - **Raw text view.** Edit the underlying `.mbseq` text directly with validation.
 - **Import & export.** Import MIDI; export bank/song as MIDI; bounce bank to **WAV**.
-  (Anti-click protection included).
+  (Anti-click protection and expressive rendering included).
+
 - **Unsaved-changes guard.** Title bar shows `*` and app warns before quitting.
 - **Tooltips.** Hover over any button for help.
 
