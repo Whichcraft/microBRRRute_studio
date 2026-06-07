@@ -20,9 +20,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Enforce the MicroBrute SE hardware limit of **64 steps per pattern bank**: the
   editor refuses to grow a bank past 64 (with a status-bar notice) and the
   parser rejects files/raw text that exceed it.
-- `pyproject.toml` packaging (installable via `pip install -e .`, `mbseq-studio`
-  entry point) and a **GitHub Actions CI** workflow running the headless tests on
-  Linux/Windows/macOS across Python 3.10 and 3.12.
+- `pyproject.toml` packaging (installable via `pip install -e .`, with a
+  `microbrrrute-studio` entry point) and a **GitHub Actions CI** workflow running
+  the headless tests on Linux/Windows/macOS across Python 3.10 and 3.12.
+
+### Changed
+- **Renamed the project to microBRRRute Studio.** The GitHub repo is now
+  `Whichcraft/microBRRRute_studio`, the Python package is `microbrrrute_studio`,
+  and the Windows build is `microBRRRute_Studio.exe`. The `.mbseq` file format
+  and the `MbseqProject` class keep their names (they refer to Arturia's format).
 
 ### Fixed
 - Startup crash binding the non-ASCII `ö` PC key; unbindable keys are now

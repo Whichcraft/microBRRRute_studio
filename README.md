@@ -64,7 +64,9 @@ python main.py
 `paplay`:
 
 ```bash
-sudo apt install python3-tk alsa-utils    # Debian/Ubuntu
+sudo apt install python3-tk alsa-utils      # Debian/Ubuntu, default python3
+# if you run a specific interpreter, install its matching Tk, e.g.:
+sudo apt install python3.14-tk
 python3 main.py
 ```
 
