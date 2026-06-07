@@ -171,15 +171,15 @@ def render_steps_wav(path: Path | str, steps: list[int | None], bpm: int = 120,
 
 def play_pre_rendered_wav(path: Path):
     """Play a pre-rendered WAV file in a background thread."""
-    duration = 0
+    duration: float = 0.0
     with wave.open(str(path), 'r') as w:
-        duration = w.getnframes() / w.getframerate()
+        duration = float(w.getnframes()) / w.getframerate()
 
     def worker():
         try:
             if _IS_WINDOWS:
                 import winsound
-                winsound.PlaySound(str(path), winsound.SND_FILENAME | winsound.SND_ASYNC)
+                winsound.PlaySound(str(path), winsound.SND_FILENAME | winsound.SND_ASYNC) # type: ignore
                 time.sleep(duration + 0.1)
             else:
                 _play_unix(path, duration)
@@ -197,7 +197,7 @@ def stop_all() -> None:
     if _IS_WINDOWS:
         try:
             import winsound
-            winsound.PlaySound(None, winsound.SND_PURGE)
+            winsound.PlaySound(None, winsound.SND_PURGE) # type: ignore
         except Exception:
             pass
         return

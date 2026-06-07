@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.8.6] - 2026-06-07
+
+### Fixed
+- Fixed `mypy` type-checking errors in `synth.py`.
+- Added return type hints to core methods in `app.py` to improve static analysis
+  coverage.
+
 ## [0.8.5] - 2026-06-07
 
 ### Changed

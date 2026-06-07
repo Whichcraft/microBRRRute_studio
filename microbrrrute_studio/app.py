@@ -54,7 +54,7 @@ class ToolTip:
             tw.destroy()
 
 class MbseqStudio(tk.Tk):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.title('microBRRRute Studio - MicroBrute SE Composer')
         self.geometry('1380x850')
@@ -98,7 +98,7 @@ class MbseqStudio(tk.Tk):
         self.protocol('WM_DELETE_WINDOW', self.on_close)
         self.refresh_all()
 
-    def _set_icon(self):
+    def _set_icon(self) -> None:
         # Find icon file (handles running from source or frozen EXE)
         icon_dir = Path(__file__).parent.parent
         icon_png = icon_dir / 'icon.png'
@@ -113,7 +113,7 @@ class MbseqStudio(tk.Tk):
         except Exception:
             pass
 
-    def _setup_dnd(self):
+    def _setup_dnd(self) -> None:
         if sys.platform != 'win32':
             return
         
@@ -139,7 +139,7 @@ class MbseqStudio(tk.Tk):
         except Exception:
             pass
 
-    def _build(self):
+    def _build(self) -> None:
         self._build_menu()
         top = ttk.Frame(self, padding=8)
         top.pack(fill='x')
@@ -268,7 +268,7 @@ class MbseqStudio(tk.Tk):
         self.status = ttk.Label(self, padding=(8,0,8,8), text='')
         self.status.pack(fill='x')
 
-    def _build_menu(self):
+    def _build_menu(self) -> None:
         m = tk.Menu(self)
         fm = tk.Menu(m, tearoff=False)
         fm.add_command(label='Open .mbseq', command=self.open_file)
@@ -299,7 +299,7 @@ class MbseqStudio(tk.Tk):
         m.add_cascade(label='View', menu=vm)
         self.config(menu=m)
 
-    def _bind_keys(self):
+    def _bind_keys(self) -> None:
         self.bind('<space>', lambda e: self.toggle_play())   # DAW convention
         self.bind('r', lambda e: self.insert_rest())
         self.bind('<Insert>', lambda e: self.insert_rest())
@@ -334,7 +334,7 @@ class MbseqStudio(tk.Tk):
             return True
         return False
 
-    def toggle_theme(self):
+    def toggle_theme(self) -> None:
         style = ttk.Style()
         if self.dark_mode.get():
             self.configure(bg='#2b2b2b')
@@ -360,7 +360,7 @@ class MbseqStudio(tk.Tk):
             self.raw.configure(bg='#ffffff', fg='#000000', insertbackground='black')
         self.refresh_all()
 
-    def refresh_all(self):
+    def refresh_all(self) -> None:
         self.refresh_grid()
         self.refresh_keyboard()
         self.refresh_raw()
@@ -380,13 +380,13 @@ class MbseqStudio(tk.Tk):
                 pass
         return []
 
-    def _save_recent(self):
+    def _save_recent(self) -> None:
         try:
             self._recent_config_path().write_text(json.dumps(self.recent_files), encoding='utf-8')
         except Exception:
             pass
 
-    def _add_recent(self, path: str | Path):
+    def _add_recent(self, path: str | Path) -> None:
         p = str(Path(path).absolute())
         if p in self.recent_files:
             self.recent_files.remove(p)
@@ -395,7 +395,7 @@ class MbseqStudio(tk.Tk):
         self._save_recent()
         self._refresh_recent_menu()
 
-    def _refresh_recent_menu(self):
+    def _refresh_recent_menu(self) -> None:
         if not hasattr(self, 'recent_menu'):
             return
         self.recent_menu.delete(0, 'end')
