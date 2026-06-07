@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.8.0] - 2026-06-07
+
+### Fixed
+- Fixed CI quality checks by properly defining `ruff` and `mypy` in the `dev`
+  optional dependencies in `pyproject.toml`.
+
 ## [0.7.9] - 2026-06-07
 
 ### Changed
