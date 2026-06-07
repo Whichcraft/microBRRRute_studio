@@ -1,7 +1,5 @@
 """Headless tests for the data layer (no tkinter / no audio device needed)."""
-import struct
 import wave
-from pathlib import Path
 
 from microbrrrute_studio.mbseq import MbseqProject, midi_to_name, name_to_midi, transpose_steps
 from microbrrrute_studio.midi_export import export_midi, export_song_midi, import_midi, vlq

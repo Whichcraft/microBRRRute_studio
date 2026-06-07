@@ -3,16 +3,14 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from pathlib import Path
 import json
-import time
 import uuid
 import tempfile
 import sys
 if sys.platform == 'win32':
     import ctypes
-    from ctypes import wintypes
 
 from .mbseq import (
-    MbseqProject, midi_to_name, name_to_midi, transpose_steps,
+    MbseqProject, midi_to_name, transpose_steps,
     MIN_PLAYABLE, MAX_PLAYABLE
 )
 from .synth import (
@@ -363,7 +361,10 @@ class MbseqStudio(tk.Tk):
         self.refresh_all()
 
     def refresh_all(self):
-        self.refresh_grid(); self.refresh_keyboard(); self.refresh_raw(); self.refresh_status()
+        self.refresh_grid()
+        self.refresh_keyboard()
+        self.refresh_raw()
+        self.refresh_status()
 
     def _recent_config_path(self) -> Path:
         return Path.home() / '.microbrrrute_studio_recent.json'
@@ -507,12 +508,15 @@ class MbseqStudio(tk.Tk):
         slot = int(self.slot.get())
         self.project.sequences[slot] = transpose_steps(self.steps(), semitones)
         self.mark_dirty()
-        self.refresh_grid(); self.refresh_keyboard(); self.refresh_raw()
+        self.refresh_grid()
+        self.refresh_keyboard()
+        self.refresh_raw()
 
     # --- MIDI / WAV import & export ----------------------------------------
     def import_midi_file(self):
         p = filedialog.askopenfilename(filetypes=[('MIDI file','*.mid'),('All files','*.*')])
-        if not p: return
+        if not p:
+            return
         try:
             steps = import_midi(p)
         except Exception as e:
@@ -526,7 +530,8 @@ class MbseqStudio(tk.Tk):
         self.push_undo()
         self.project.sequences[int(self.slot.get())] = steps
         self.mark_dirty()
-        self.cursor.set(0); self.refresh_all()
+        self.cursor.set(0)
+        self.refresh_all()
 
     def export_song_midi_file(self):
         banks = [self.project.sequences[b] for b in range(1, 9)
@@ -535,7 +540,8 @@ class MbseqStudio(tk.Tk):
             return messagebox.showinfo('Export song', 'All banks are empty.')
         p = filedialog.asksaveasfilename(defaultextension='.mid',
             filetypes=[('MIDI file','*.mid'),('All files','*.*')])
-        if not p: return
+        if not p:
+            return
         try:
             export_song_midi(p, banks, bpm=self.tempo.get())
         except Exception as e:
@@ -544,7 +550,8 @@ class MbseqStudio(tk.Tk):
     def export_bank_wav(self):
         p = filedialog.asksaveasfilename(defaultextension='.wav',
             filetypes=[('WAV audio','*.wav'),('All files','*.*')])
-        if not p: return
+        if not p:
+            return
         try:
             render_steps_wav(p, self.steps(), bpm=self.tempo.get(),
                              wave_shape=self.wave_shape.get(), volume=self.volume.get())
@@ -569,8 +576,10 @@ class MbseqStudio(tk.Tk):
 
     def refresh_grid(self):
         steps = self.steps()
-        if self.cursor.get() < 0: self.cursor.set(0)
-        if self.cursor.get() >= len(steps): self.cursor.set(max(0,len(steps)-1))
+        if self.cursor.get() < 0:
+            self.cursor.set(0)
+        if self.cursor.get() >= len(steps):
+            self.cursor.set(max(0, len(steps) - 1))
 
         # Calculate how many columns can fit
         win_width = self.winfo_width()
@@ -585,7 +594,8 @@ class MbseqStudio(tk.Tk):
         # but for simple note updates, we can just update.
         # We'll store current cols to detect layout changes.
         if not hasattr(self, '_last_cols') or self._last_cols != cols or len(children) != required_widgets:
-            for w in children: w.destroy()
+            for w in children:
+                w.destroy()
             self.step_buttons.clear()
             self._last_cols = cols
 
@@ -707,61 +717,86 @@ class MbseqStudio(tk.Tk):
         if idx >= len(steps) and self._at_step_limit():
             return
         self.push_undo()
-        if idx >= len(steps): steps.append(note)
-        else: steps[idx] = note
+        if idx >= len(steps):
+            steps.append(note)
+        else:
+            steps[idx] = note
         self.mark_dirty()
         self.move_cursor(1, refresh=False)
-        self.refresh_grid(); self.refresh_raw()
+        self.refresh_grid()
+        self.refresh_raw()
 
     def insert_rest(self):
-        steps = self.steps(); idx = self.cursor.get()
+        steps = self.steps()
+        idx = self.cursor.get()
         if idx >= len(steps) and self._at_step_limit():
             return
         self.push_undo()
-        if idx >= len(steps): steps.append(None)
-        else: steps[idx] = None
+        if idx >= len(steps):
+            steps.append(None)
+        else:
+            steps[idx] = None
         self.mark_dirty()
         self.move_cursor(1, refresh=False)
-        self.refresh_grid(); self.refresh_raw()
+        self.refresh_grid()
+        self.refresh_raw()
 
     def select_step(self, idx:int):
-        self.cursor.set(idx); self.refresh_grid()
+        self.cursor.set(idx)
+        self.refresh_grid()
         n = self.steps()[idx]
-        if n is not None: self.preview_note(n)
+        if n is not None:
+            self.preview_note(n)
 
     def set_step_rest(self, idx:int):
         self.push_undo()
-        self.steps()[idx] = None; self.mark_dirty(); self.cursor.set(idx); self.refresh_grid(); self.refresh_raw()
+        self.steps()[idx] = None
+        self.mark_dirty()
+        self.cursor.set(idx)
+        self.refresh_grid()
+        self.refresh_raw()
 
     def move_cursor(self, delta:int, refresh=True):
         self.cursor.set(max(0, min(len(self.steps())-1, self.cursor.get()+delta)))
-        if refresh: self.refresh_grid()
+        if refresh:
+            self.refresh_grid()
 
     def change_slot(self):
-        self.cursor.set(0); self.refresh_all()
+        self.cursor.set(0)
+        self.refresh_all()
 
     def add_step(self):
-        if self._at_step_limit(): return
+        if self._at_step_limit():
+            return
         self.push_undo()
-        steps = self.steps(); idx = self.cursor.get()+1
-        steps.insert(idx, None); self.mark_dirty(); self.cursor.set(idx); self.refresh_grid(); self.refresh_raw()
+        steps = self.steps()
+        idx = self.cursor.get()+1
+        steps.insert(idx, None)
+        self.mark_dirty()
+        self.cursor.set(idx)
+        self.refresh_grid()
+        self.refresh_raw()
 
     def delete_step(self):
         steps = self.steps()
-        if not steps: return
+        if not steps:
+            return
         self.push_undo()
         steps.pop(self.cursor.get())
-        if not steps: steps.append(None)
+        if not steps:
+            steps.append(None)
         self.mark_dirty()
         self.cursor.set(min(self.cursor.get(), len(steps)-1))
-        self.refresh_grid(); self.refresh_raw()
+        self.refresh_grid()
+        self.refresh_raw()
 
     def clear_slot(self):
         if messagebox.askyesno('Clear bank', f'Clear pattern bank {self.slot.get()}?'):
             self.push_undo()
             self.project.sequences[int(self.slot.get())] = [None]*MAX_STEPS
             self.mark_dirty()
-            self.cursor.set(0); self.refresh_all()
+            self.cursor.set(0)
+            self.refresh_all()
 
 
     def duplicate_bank_dialog(self):
@@ -791,7 +826,8 @@ class MbseqStudio(tk.Tk):
 
     def open_file(self):
         p = filedialog.askopenfilename(filetypes=[('MicroBrute sequence','*.mbseq'),('All files','*.*')])
-        if not p: return
+        if not p:
+            return
         self._do_open(p)
 
     def _do_open(self, p: str | Path):
@@ -799,9 +835,11 @@ class MbseqStudio(tk.Tk):
             self.project = MbseqProject.load(p)
             self.file_path = Path(p)
             self.dirty = False
-            self._undo.clear(); self._redo.clear()
+            self._undo.clear()
+            self._redo.clear()
             self.slot.set(1)
-            self.cursor.set(0); self.refresh_all()
+            self.cursor.set(0)
+            self.refresh_all()
             self._add_recent(p)
         except Exception as e:
             messagebox.showerror('Open failed', str(e))
@@ -823,7 +861,8 @@ class MbseqStudio(tk.Tk):
 
     def save_as(self):
         p = filedialog.asksaveasfilename(defaultextension='.mbseq', filetypes=[('MicroBrute sequence','*.mbseq'),('All files','*.*')])
-        if not p: return
+        if not p:
+            return
         self._do_save(p)
 
     def apply_raw(self):
@@ -833,13 +872,17 @@ class MbseqStudio(tk.Tk):
             if int(self.slot.get()) not in self.project.sequences:
                 self.slot.set(1)
             self.mark_dirty()
-            self.cursor.set(0); self.refresh_grid(); self.refresh_keyboard(); self.refresh_status()
+            self.cursor.set(0)
+            self.refresh_grid()
+            self.refresh_keyboard()
+            self.refresh_status()
         except Exception as e:
             messagebox.showerror('Raw parse failed', str(e))
 
     def export_midi_file(self):
         p = filedialog.asksaveasfilename(defaultextension='.mid', filetypes=[('MIDI file','*.mid'),('All files','*.*')])
-        if not p: return
+        if not p:
+            return
         try:
             export_midi(p, self.steps(), bpm=self.tempo.get())
         except Exception as e:
@@ -848,7 +891,8 @@ class MbseqStudio(tk.Tk):
 
     def export_all_midi_files(self):
         folder = filedialog.askdirectory(title='Choose folder for 8 MIDI bank exports')
-        if not folder: return
+        if not folder:
+            return
         try:
             base = self.file_path.stem if self.file_path else 'mbseq'
             out = Path(folder)
@@ -886,8 +930,10 @@ class MbseqStudio(tk.Tk):
 
         self.playing = True
         self._play_idx = 0
-        if self.play_btn: self.play_btn.config(state='disabled')
-        if self.stop_btn: self.stop_btn.config(state='normal')
+        if self.play_btn:
+            self.play_btn.config(state='disabled')
+        if self.stop_btn:
+            self.stop_btn.config(state='normal')
         self.refresh_all()
 
         # Pre-render ONLY the current bank for rock-solid timing
@@ -904,12 +950,14 @@ class MbseqStudio(tk.Tk):
         else:
             self._start_audio_and_tick()
     def _start_audio_and_tick(self):
-        if not self.playing or not self._pre_render_file: return
+        if not self.playing or not self._pre_render_file:
+            return
         play_pre_rendered_wav(self._pre_render_file)
         self._play_tick()
 
     def _play_count_in(self, steps_left: int):
-        if not self.playing: return
+        if not self.playing:
+            return
         if steps_left <= 0:
             return self._start_audio_and_tick()
         div = 4 if self.step_res.get() == '1/16' else 2
@@ -919,7 +967,8 @@ class MbseqStudio(tk.Tk):
         self._after_id = self.after(ms, lambda: self._play_count_in(steps_left - 1))
 
     def _play_tick(self):
-        if not self.playing: return
+        if not self.playing:
+            return
         steps = self.steps()
         div = 4 if self.step_res.get() == '1/16' else 2
         ms = int(60000 / max(1, self.tempo.get()) / div)  # eighth-note-ish steps
@@ -953,22 +1002,27 @@ class MbseqStudio(tk.Tk):
     def stop_sequence(self):
         self.playing = False
         if self._after_id:
-            try: self.after_cancel(self._after_id)
-            except Exception: pass
+            try:
+                self.after_cancel(self._after_id)
+            except Exception:
+                pass
             self._after_id = None
         stop_all()                             # silence the in-flight note now
-        
+
         # Cleanup pre-rendered file
         if self._pre_render_file:
-            try: self._pre_render_file.unlink()
-            except Exception: pass
+            try:
+                self._pre_render_file.unlink()
+            except Exception:
+                pass
             self._pre_render_file = None
-            
-        self._playhead = -1
-        if self.play_btn: self.play_btn.config(state='normal')
-        if self.stop_btn: self.stop_btn.config(state='disabled')
-        self.refresh_grid()
 
+        self._playhead = -1
+        if self.play_btn:
+            self.play_btn.config(state='normal')
+        if self.stop_btn:
+            self.stop_btn.config(state='disabled')
+        self.refresh_grid()
 
 def main():
     MbseqStudio().mainloop()

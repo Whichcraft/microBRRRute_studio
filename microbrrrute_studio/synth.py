@@ -1,5 +1,14 @@
 from __future__ import annotations
-import math, struct, tempfile, wave, threading, os, sys, subprocess, time, uuid
+import math
+import struct
+import tempfile
+import wave
+import threading
+import os
+import sys
+import subprocess
+import time
+import uuid
 from pathlib import Path
 
 A4 = 440.0

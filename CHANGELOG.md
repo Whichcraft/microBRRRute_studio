@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.8.4] - 2026-06-07
+
+### Fixed
+- Fixed all 63 `ruff` linting errors, including unused imports and formatting
+  (multiple statements on one line). This ensures cleaner code and passing CI.
+
 ## [0.8.3] - 2026-06-07
 
 ### Changed
