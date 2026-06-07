@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.9.1] - 2026-06-07
+
+### Added
+- **Multi-step Selection** — select multiple steps using `Shift+Click` (range)
+  or `Ctrl+Click` (toggle). Batch operations like **Transpose** and **Delete**
+  now work on the entire selection.
+- Added "Clear Selection" to the Edit menu.
+
 ## [0.9.0] - 2026-06-07
 
 ### Added
