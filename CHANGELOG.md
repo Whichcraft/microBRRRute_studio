@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.11.0] - 2026-06-07
+
+### Added
+- **Piano Roll Zoom and Pan** — you can now zoom into the Visual Piano Roll
+  using `Ctrl + MouseWheel` and pan vertically using the `MouseWheel`.
+- **New Keyboard Shortcuts** — added `Ctrl+N` to quickly rename the current bank
+   and `Ctrl+R` to open the Pattern Randomizer.
+- **Enhanced Drag-and-Drop Feedback** — active drop targets in the step grid
+  now highlight with a distinct border and color during reordering.
+
 ## [0.10.0] - 2026-06-07
 
 ### Added

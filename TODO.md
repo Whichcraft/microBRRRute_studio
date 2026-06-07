@@ -14,6 +14,5 @@ Proposed improvements, roughly ordered by value. Done items move to
 - [ ] Arpeggiator: transform simple chords or patterns into complex arpeggios.
 
 ## UI / UX
-- [ ] Keyboard shortcuts for naming banks and opening the randomizer.
-- [ ] Zoom and pan support for the visual Piano Roll.
-- [ ] Better visual feedback for drag-and-drop targets on the grid.
+- [ ] Visual piano roll editor: horizontal zoom support.
+- [ ] Selection tools for the Piano Roll (drag-to-select).
