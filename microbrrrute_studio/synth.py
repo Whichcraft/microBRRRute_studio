@@ -15,6 +15,7 @@ from .mbseq import Step
 
 A4 = 440.0
 _last_error: str | None = None
+_error_lock = threading.Lock()
 
 # Playback engine state -------------------------------------------------------
 # The MicroBrute is a monophonic synth, so preview playback is monophonic too:
@@ -27,7 +28,8 @@ _active_procs: set[subprocess.Popen] = set()
 
 
 def get_last_audio_error() -> str | None:
-    return _last_error
+    with _error_lock:
+        return _last_error
 
 
 def midi_freq(note: int) -> float:
@@ -45,8 +47,8 @@ def make_wave(
     total = max(1, int(duration * sample_rate))
     freq = midi_freq(note)
     amp = int(32767 * max(0.0, min(volume, 1.0)))
-    attack = int(0.008 * sample_rate)
-    release = int(0.035 * sample_rate)
+    attack = max(1, min(int(0.008 * sample_rate), total // 2))
+    release = max(1, min(int(0.035 * sample_rate), total // 2))
     with wave.open(str(path), "wb") as w:
         w.setnchannels(1)
         w.setsampwidth(2)
@@ -108,6 +110,7 @@ def render_steps_to_data(
     r_f = max(1, int(release * sample_rate))
 
     all_frames = bytearray()
+    total_samples = 0
     for idx, s in enumerate(steps):
         frames = [0.0] * step_frames
 
@@ -119,11 +122,12 @@ def render_steps_to_data(
             for i in range(min(click_len, step_frames)):
                 phase = (f * (i / sample_rate)) % 1.0
                 env = 1.0 - (i / click_len)
-                frames[i] += math.sin(2 * math.pi * phase) * 0.4 * env
+                frames[i] += math.sin(2 * math.pi * phase) * 0.10 * env
 
         if s.note is not None:
             freq = midi_freq(s.note)
-            note_frames = max(1, int(step_frames * s.gate))
+            gate = max(0.0, min(s.gate, 1.0))
+            note_frames = max(1, int(step_frames * gate))
             step_amp = volume * 1.5 if s.accent else volume
             amp_scaled = int(32767 * max(0.0, min(step_amp, 1.0)))
 
@@ -133,7 +137,7 @@ def render_steps_to_data(
             render_until = step_frames if has_slide else note_frames
 
             for i in range(render_until):
-                phase = (freq * (i / sample_rate)) % 1.0
+                phase = (freq * ((total_samples + i) / sample_rate)) % 1.0
                 val = _osc_sample(phase, wave_shape)
 
                 # ADSR Logic
@@ -153,13 +157,13 @@ def render_steps_to_data(
 
             for f in frames:
                 v = max(-1.0, min(1.0, f))
-                all_frames += struct.pack(
-                    "<h", int(v * amp_scaled if s.note is not None else v * click_amp)
-                )
+                all_frames += struct.pack("<h", int(v * amp_scaled))
         else:
             for f in frames:
                 v = max(-1.0, min(1.0, f))
                 all_frames += struct.pack("<h", int(v * click_amp))
+
+        total_samples += step_frames
 
     return bytes(all_frames)
 
@@ -188,8 +192,7 @@ def render_steps_wav(
     step_secs = 60.0 / max(1, bpm) / 2
     step_frames = max(1, int(step_secs * sample_rate))
     amp = int(32767 * max(0.0, min(volume, 1.0)))
-    attack = max(1, int(0.008 * sample_rate))
-    release = max(1, int(0.035 * sample_rate))
+    total_samples = 0
     with wave.open(str(path), "wb") as w:
         w.setnchannels(1)
         w.setsampwidth(2)
@@ -203,21 +206,24 @@ def render_steps_wav(
                     1,
                     int(step_frames * max(0.0, min(step.gate, 1.0))),
                 )
+                a_f = min(max(1, int(0.008 * sample_rate)), note_frames // 2)
+                r_f = min(max(1, int(0.035 * sample_rate)), note_frames // 2)
                 freq = midi_freq(step.note)
                 for i in range(step_frames):
                     if i >= note_frames:
                         frames += b"\x00\x00"
                         continue
-                    phase = (freq * (i / sample_rate)) % 1.0
+                    phase = (freq * ((total_samples + i) / sample_rate)) % 1.0
                     env = 1.0
-                    if i < attack:
-                        env = i / attack
-                    if i > note_frames - release:
-                        env = min(env, (note_frames - i) / release)
+                    if i < a_f:
+                        env = i / a_f
+                    if i > note_frames - r_f:
+                        env = min(env, (note_frames - i) / r_f)
                     frames += struct.pack(
                         "<h", int(_osc_sample(phase, wave_shape) * amp * env)
                     )
             w.writeframes(bytes(frames))
+            total_samples += step_frames
 
 
 def play_pre_rendered_wav(path: Path):
@@ -292,13 +298,15 @@ def _play_unix(tmp: Path, duration: float) -> None:
             with _lock:
                 _active_procs.discard(p)
         if p.returncode == 0:
-            _last_error = None
+            with _error_lock:
+                _last_error = None
             return
         # A negative return code means we terminated it via stop_all(); not an error.
         if p.returncode is not None and p.returncode < 0:
             return
         errors.append(err.decode(errors="ignore") if err else f"exit {p.returncode}")
-    _last_error = "No Linux/macOS audio player worked: " + " | ".join(errors)
+    with _error_lock:
+        _last_error = "No Linux/macOS audio player worked: " + " | ".join(errors)
 
 
 def play_note(
@@ -326,11 +334,13 @@ def play_note(
                 # one (monophonic, matching the hardware). stop_all() purges it.
                 winsound.PlaySound(str(tmp), winsound.SND_FILENAME | winsound.SND_ASYNC)
                 time.sleep(duration + 0.05)
-                _last_error = None
+                with _error_lock:
+                    _last_error = None
             else:
                 _play_unix(tmp, duration)
         except Exception as exc:
-            _last_error = str(exc)
+            with _error_lock:
+                _last_error = str(exc)
         finally:
             try:
                 tmp.unlink()

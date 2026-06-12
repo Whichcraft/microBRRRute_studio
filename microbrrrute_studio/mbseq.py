@@ -29,22 +29,9 @@ class MbseqProject:
     @classmethod
     def parse(cls, text: str) -> 'MbseqProject':
         seqs: dict[int, list[Step]] = {}
-        names: dict[int, str] = {}
         for lineno, raw in enumerate(text.splitlines(), 1):
             line = raw.strip()
-            if not line:
-                continue
-            # Parse bank names from comments like "# Name 1: Intro"
-            if line.startswith('# Name '):
-                try:
-                    parts = line[7:].split(':', 1)
-                    if len(parts) == 2:
-                        b_idx = int(parts[0].strip())
-                        names[b_idx] = parts[1].strip()
-                except Exception:
-                    pass
-                continue
-            if line.startswith('#'):
+            if not line or line.startswith('#'):
                 continue
             if ':' not in line:
                 raise ValueError(f'Line {lineno}: missing colon')
@@ -67,17 +54,15 @@ class MbseqProject:
                     steps.append(Step(note=note))
             if len(steps) > MAX_STEPS:
                 raise ValueError(f'Line {lineno}: bank {slot} has {len(steps)} steps; MicroBrute SE allows at most {MAX_STEPS}')
-            # Pad to MAX_STEPS
             if len(steps) < MAX_STEPS:
                 steps.extend([Step() for _ in range(MAX_STEPS - len(steps))])
             seqs[slot] = steps
         if not seqs:
             return cls.empty()
-        # Ensure all banks 1..8 exist.
+        bank_names = {i: f'Bank {i}' for i in range(1, 9)}
         for slot in range(1, 9):
             seqs.setdefault(slot, [Step() for _ in range(MAX_STEPS)])
-            names.setdefault(slot, f'Bank {slot}')
-        return cls(seqs, names)
+        return cls(seqs, bank_names)
 
     @classmethod
     def load(cls, path: str | Path) -> 'MbseqProject':
@@ -85,16 +70,11 @@ class MbseqProject:
 
     def serialize(self) -> str:
         lines = []
-        # Write bank names as comments (standardized headers)
-        for slot in range(1, 9):
-            name = self.bank_names.get(slot, f'Bank {slot}')
-            lines.append(f'# Name {slot}: {name}')
-        
-        # Always write banks 1..8 in Arturia-compatible order, padded to MAX_STEPS.
         for slot in range(1, 9):
             steps = self.sequences.get(slot, [Step() for _ in range(MAX_STEPS)])
             if len(steps) < MAX_STEPS:
                 steps = steps + [Step() for _ in range(MAX_STEPS - len(steps))]
+            steps = steps[:MAX_STEPS]
             tokens = ['x' if s.note is None else str(s.note) for s in steps]
             lines.append(f'{slot}:{" ".join(tokens)}')
         return '\n'.join(lines) + '\n'
@@ -110,7 +90,7 @@ def transpose_steps(steps: list[Step], semitones: int) -> list[Step]:
     out: list[Step] = []
     for s in steps:
         if s.note is None:
-            out.append(s)
+            out.append(Step(note=None, gate=s.gate, accent=s.accent, slide=s.slide))
         else:
             new_note = max(0, min(127, s.note + semitones))
             out.append(Step(note=new_note, gate=s.gate, accent=s.accent, slide=s.slide))
@@ -118,7 +98,7 @@ def transpose_steps(steps: list[Step], semitones: int) -> list[Step]:
 
 
 NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
-FLAT_TO_SHARP = {'DB':'C#','EB':'D#','GB':'F#','AB':'G#','BB':'A#'}
+FLAT_TO_SHARP = {'CB':'B','DB':'C#','EB':'D#','FB':'E','GB':'F#','AB':'G#','BB':'A#'}
 
 def midi_to_name(n: int) -> str:
     return f'{NOTE_NAMES[n % 12]}{(n // 12) - 1}'
@@ -136,6 +116,8 @@ def name_to_midi(value: str) -> int:
         name, oct_s = s[:2], s[2:]
     else:
         name, oct_s = s[:1], s[1:]
+    if not oct_s:
+        raise ValueError(f'Missing octave in note name: {value}')
     name = FLAT_TO_SHARP.get(name, name)
     if name not in NOTE_NAMES:
         raise ValueError(f'Unknown note name: {value}')

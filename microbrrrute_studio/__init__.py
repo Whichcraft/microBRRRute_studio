@@ -3,4 +3,4 @@
 `__version__` is the single source of truth for the project version (pyproject
 reads it dynamically). Follow Semantic Versioning.
 """
-__version__ = '0.12.1'
+__version__ = '0.13.0'

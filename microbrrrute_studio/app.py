@@ -342,6 +342,10 @@ class MbseqStudio(tk.Tk):
         text_frame.pack(fill="x", padx=8, pady=4)
         self.raw = tk.Text(text_frame, height=3, font=("Consolas", 10), undo=True)
         self.raw.pack(fill="both", expand=True)
+        self.raw.bind("<Control-Return>", lambda e: self.apply_raw())
+        ttk.Button(text_frame, text="Apply raw", command=self.apply_raw).pack(
+            side="right", padx=6
+        )
 
         ec = ttk.Frame(self, padding=(8, 0, 8, 6))
         ec.pack(fill="x")
@@ -923,7 +927,11 @@ class MbseqStudio(tk.Tk):
             idx = start + i
             if idx >= MAX_STEPS:
                 break
-            v = None if t.lower() == "x" else int(t)
+            try:
+                v = None if t.lower() == "x" else int(t)
+            except ValueError:
+                messagebox.showinfo("Paste Selection", "Clipboard contains invalid data.")
+                return
             if idx >= len(steps):
                 steps.append(Step(note=v))
             else:
@@ -946,9 +954,13 @@ class MbseqStudio(tk.Tk):
         tokens = text.split()
         if not tokens:
             return
-        new = [Step(note=(None if t.lower() == "x" else int(t))) for t in tokens][
-            :MAX_STEPS
-        ]
+        try:
+            new = [Step(note=(None if t.lower() == "x" else int(t))) for t in tokens][
+                :MAX_STEPS
+            ]
+        except ValueError:
+            messagebox.showinfo("Paste Bank", "Clipboard contains invalid data.")
+            return
         self.push_undo()
         self.project.sequences[int(self.slot.get())] = new
         self.mark_dirty()
@@ -1072,7 +1084,9 @@ class MbseqStudio(tk.Tk):
             self.refresh_piano_roll()
 
     def refresh_grid(self) -> None:
-        steps = self.steps()
+        steps = self.steps()[:self.bank_length.get()]
+        if self.cursor.get() >= len(steps):
+            self.cursor.set(max(0, len(steps) - 1))
         win_width = self.winfo_width()
         btn_width = 65
         cols = max(1, (win_width - 40) // btn_width)
@@ -1174,7 +1188,7 @@ class MbseqStudio(tk.Tk):
     def _on_piano_roll_scroll(self, event: tk.Event) -> None:
         wheel_up = self._wheel_up(event)
         state = int(event.state)
-        ctrl = bool(state & 0x0004)
+        ctrl = bool(state & (0x0004 | 0x20000))
         shift = bool(state & 0x0001)
         if ctrl and shift:
             factor = 1.1 if wheel_up else 1 / 1.1
@@ -1407,7 +1421,7 @@ class MbseqStudio(tk.Tk):
             self.piano_roll.create_rectangle(
                 x, y, x + width, y + height, fill=fill, outline="#555555"
             )
-            if height >= 9 or idx % 4 == 0:
+            if height >= 12 and (idx % 4 == 0 or height >= 18):
                 self.piano_roll.create_text(
                     x + width / 2,
                     y + height / 2,
@@ -1422,7 +1436,7 @@ class MbseqStudio(tk.Tk):
             self.piano_roll.create_rectangle(
                 x, y, x + width, y + height, fill=fill, outline="#555555"
             )
-            if width >= 14 or idx % 4 == 0:
+            if width >= 18 and (idx % 4 == 0 or width >= 24):
                 self.piano_roll.create_text(
                     x + width / 2,
                     y + height / 2,
@@ -1449,17 +1463,21 @@ class MbseqStudio(tk.Tk):
             color = "#0078d7"
         else:
             color = "#ffffff" if step.accent else "#ffcc00"
-        outline = (
-            "#ffffff" if step.slide else "#ffa500" if idx in self._selection else ""
-        )
-        self.piano_roll.create_rectangle(
-            x + 1,
-            y + 1,
-            x + width - 1,
-            y + height - 1,
-            fill=color,
-            outline=outline,
-        )
+        if step.slide:
+            self.piano_roll.create_rectangle(
+                x + 1, y + 1, x + width - 1, y + height - 1,
+                fill=color, outline="#ffffff",
+            )
+        elif idx in self._selection:
+            self.piano_roll.create_rectangle(
+                x + 1, y + 1, x + width - 1, y + height - 1,
+                fill=color, outline="#ffa500",
+            )
+        else:
+            self.piano_roll.create_rectangle(
+                x + 1, y + 1, x + width - 1, y + height - 1,
+                fill=color,
+            )
 
     def _piano_roll_position(self, x: float, y: float) -> tuple[int, int]:
         _, h, keyboard_size, _, _, step_size, note_size = self._piano_roll_metrics()
@@ -1548,21 +1566,24 @@ class MbseqStudio(tk.Tk):
         self.select_step(idx)
         m = tk.Menu(self, tearoff=0)
         s = self.steps()[idx]
-        m.add_command(label="Set Rest", command=lambda: self.set_step_rest(idx))
+        m.add_command(
+            label="Set Rest",
+            command=lambda i=idx: self.set_step_rest(i),  # type: ignore[misc]
+        )
         m.add_separator()
         m.add_command(
             label="Unset Accent" if s.accent else "Set Accent",
-            command=lambda: self.toggle_step_accent(idx),
+            command=lambda i=idx: self.toggle_step_accent(i),  # type: ignore[misc]
         )
         m.add_command(
             label="Unset Slide" if s.slide else "Set Slide",
-            command=lambda: self.toggle_step_slide(idx),
+            command=lambda i=idx: self.toggle_step_slide(i),  # type: ignore[misc]
         )
         gm = tk.Menu(m, tearoff=0)
         for g in [0.25, 0.5, 0.82, 1.0]:
             gm.add_radiobutton(
                 label=f"{int(g * 100)}%",
-                command=lambda v=g: self.set_step_gate(idx, v),  # type: ignore[misc]
+                command=lambda v=g, i=idx: self.set_step_gate(i, v),  # type: ignore[misc]
             )
         m.add_cascade(label="Gate Length", menu=gm)
         m.post(event.x_root, event.y_root)
@@ -1607,12 +1628,13 @@ class MbseqStudio(tk.Tk):
         rect = self.key_rects[note]
         rel = note - (self.root_note + self.octave_shift.get() * 12)
         self.keyboard.itemconfig(rect, fill="#7CFC8A")
-        self.after(
-            200,
-            lambda: self.keyboard.itemconfig(
-                rect, fill=("black" if rel in BLACK_OFFSETS else "white")
-            ),
-        )
+
+        def _restore(r: int = rect, rl: int = rel) -> None:
+            self.keyboard.itemconfig(
+                r, fill=("black" if rl in BLACK_OFFSETS else "white")
+            )
+
+        self.after(200, _restore)
 
     def insert_note(self, note: int) -> None:
         self.preview_note(note)
@@ -1665,7 +1687,12 @@ class MbseqStudio(tk.Tk):
     def add_step(self) -> None:
         if not self._at_step_limit():
             self.push_undo()
-            self.steps().insert(self.cursor.get() + 1, Step())
+            pos = (
+                sorted(self._selection)[0] + 1
+                if self._selection
+                else self.cursor.get() + 1
+            )
+            self.steps().insert(pos, Step())
             self.mark_dirty()
             self.move_cursor(1)
             self.refresh_raw()
@@ -1743,7 +1770,11 @@ class MbseqStudio(tk.Tk):
             self.push_undo()
             self.project = MbseqProject.parse(self.raw.get("1.0", "end"))
             self.slot.set(1)
-            self.bank_name_var.set(self.project.bank_names.get(1, "Bank 1"))
+            self.bank_name_var.set(
+                self.project.bank_names.get(
+                    int(self.slot.get()), f"Bank {self.slot.get()}"
+                )
+            )
             self.mark_dirty()
             self.cursor.set(0)
             self.refresh_all()
@@ -1760,7 +1791,8 @@ class MbseqStudio(tk.Tk):
 
     def _start_playback(self) -> None:
         bank = self._play_banks[0]
-        steps = self.project.sequences.get(bank, [Step() for _ in range(MAX_STEPS)])
+        all_steps = self.project.sequences.get(bank, [Step() for _ in range(MAX_STEPS)])
+        steps = all_steps[:self.bank_length.get()]
         if not any(s.note is not None for s in steps):
             messagebox.showinfo("Info", "Bank empty")
             return
@@ -1808,7 +1840,7 @@ class MbseqStudio(tk.Tk):
     def _play_tick(self) -> None:
         if not self.playing:
             return
-        steps = self.steps()
+        steps = self.steps()[:self.bank_length.get()]
         div = 4 if self.step_res.get() == "1/16" else 2
         ms = int(60000 / max(1, self.tempo.get()) / div)
         if not steps or self._play_idx >= len(steps):
@@ -2014,10 +2046,11 @@ class MbseqStudio(tk.Tk):
         ).grid(row=0, column=1)
 
         def do():
-            if target.get() == int(self.slot.get()):
+            t = target.get()
+            if t == int(self.slot.get()) or not (1 <= t <= 8):
                 return
             self.push_undo()
-            self.project.sequences[target.get()] = [
+            self.project.sequences[t] = [
                 Step(s.note, s.gate, s.accent, s.slide) for s in self.steps()
             ]
             self.mark_dirty()
