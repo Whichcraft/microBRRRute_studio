@@ -38,11 +38,10 @@ def test_empty_has_eight_banks():
 def test_serialize_always_writes_eight_banks():
     proj = MbseqProject.parse("1:60\n")
     lines = proj.serialize().strip().splitlines()
-    bank_lines = [line for line in lines if not line.startswith("#")]
-    assert len(lines) == 16
-    assert bank_lines[0].startswith("1:60")
+    assert len(lines) == 8
+    assert lines[0].startswith("1:60")
     # check it padded bank 1 to 64 steps
-    assert len(bank_lines[0].split(":")[1].split()) == 64
+    assert len(lines[0].split(":")[1].split()) == 64
 
 
 def test_parse_rejects_bad_note():

@@ -3,6 +3,8 @@ from pathlib import Path
 
 # Minimal Standard MIDI File writer, type 0, one track.
 def vlq(value: int) -> bytes:
+    if value < 0:
+        raise ValueError('VLQ value must be non-negative')
     b = value & 0x7F
     value >>= 7
     out = bytearray([b])
@@ -42,14 +44,16 @@ def export_song_midi(path: str | Path, banks: list[list[int | None]], bpm: int =
     export_midi(path, combined, bpm=bpm, ticks_per_step=ticks_per_step, gate=gate)
 
 
-def read_vlq(data: bytes, i: int) -> tuple[int, int]:
+def read_vlq(data: bytes, i: int, limit: int = -1) -> tuple[int, int]:
+    end = limit if limit >= 0 else len(data)
     value = 0
-    while True:
+    while i < end:
         b = data[i]
         i += 1
         value = (value << 7) | (b & 0x7F)
         if not (b & 0x80):
             return value, i
+    raise ValueError('Truncated VLQ in MIDI data')
 
 
 def import_midi(path: str | Path, ticks_per_step: int | None = None) -> list[int | None]:
@@ -73,34 +77,55 @@ def import_midi(path: str | Path, ticks_per_step: int | None = None) -> list[int
     i = 14
     while i + 8 <= len(data):
         if data[i:i+4] != b'MTrk':
-            break
+            i += 1
+            continue
         length = int.from_bytes(data[i+4:i+8], 'big')
         i += 8
         end = i + length
         t = 0
         status = 0
         while i < end:
-            delta, i = read_vlq(data, i)
+            delta, i = read_vlq(data, i, end)
             t += delta
             b = data[i]
             if b & 0x80:
                 status = b
                 i += 1
-            # else: running status reuses the previous `status` byte
+            # Running status is only valid for channel voice messages (0x80-0xEF).
+            # Reset status after non-channel events so stale bytes don't corrupt parsing.
             ev = status & 0xF0
             if status == 0xFF:           # meta event
                 i += 1
-                mlen, i = read_vlq(data, i)
+                mlen, i = read_vlq(data, i, end)
                 i += mlen
+                status = 0
+            elif status == 0xF0 or status == 0xF7:  # SysEx
+                while i < end and data[i] != 0xF7:
+                    i += 1
+                if i < end:
+                    i += 1  # skip terminator
+                status = 0
+            elif status in (0xF1, 0xF3):  # 2-byte system messages
+                i += 1
+                status = 0
+            elif status == 0xF2:          # 3-byte system message (song pos)
+                i += 2
+                status = 0
             elif ev in (0xC0, 0xD0):     # program change / channel pressure: 1 data byte
                 i += 1
             elif ev in (0x90, 0x80, 0xA0, 0xB0, 0xE0):
+                if i + 1 >= end:
+                    break
                 note, vel = data[i], data[i+1]
                 i += 2
                 if ev == 0x90 and vel > 0:
                     events.append((t, note))
+                # 0x90 with vel=0 is a note-off per MIDI spec; handled by
+                # the step-grid quantizer below (omitted event → rest).
+            elif status in (0xF6,) or (0xF8 <= status <= 0xFE):
+                status = 0  # realtime messages
             else:
-                i += 1  # unknown byte: advance to stay in sync
+                i += 1
         i = end
 
     if not events:
