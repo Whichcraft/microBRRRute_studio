@@ -47,8 +47,8 @@ def make_wave(
     total = max(1, int(duration * sample_rate))
     freq = midi_freq(note)
     amp = int(32767 * max(0.0, min(volume, 1.0)))
-    attack = int(0.008 * sample_rate)
-    release = int(0.035 * sample_rate)
+    attack = max(1, min(int(0.008 * sample_rate), total // 2))
+    release = max(1, min(int(0.035 * sample_rate), total // 2))
     with wave.open(str(path), "wb") as w:
         w.setnchannels(1)
         w.setsampwidth(2)
@@ -192,8 +192,7 @@ def render_steps_wav(
     step_secs = 60.0 / max(1, bpm) / 2
     step_frames = max(1, int(step_secs * sample_rate))
     amp = int(32767 * max(0.0, min(volume, 1.0)))
-    attack = max(1, int(0.008 * sample_rate))
-    release = max(1, int(0.035 * sample_rate))
+    total_samples = 0
     with wave.open(str(path), "wb") as w:
         w.setnchannels(1)
         w.setsampwidth(2)
@@ -207,21 +206,24 @@ def render_steps_wav(
                     1,
                     int(step_frames * max(0.0, min(step.gate, 1.0))),
                 )
+                a_f = min(max(1, int(0.008 * sample_rate)), note_frames // 2)
+                r_f = min(max(1, int(0.035 * sample_rate)), note_frames // 2)
                 freq = midi_freq(step.note)
                 for i in range(step_frames):
                     if i >= note_frames:
                         frames += b"\x00\x00"
                         continue
-                    phase = (freq * (i / sample_rate)) % 1.0
+                    phase = (freq * ((total_samples + i) / sample_rate)) % 1.0
                     env = 1.0
-                    if i < attack:
-                        env = i / attack
-                    if i > note_frames - release:
-                        env = min(env, (note_frames - i) / release)
+                    if i < a_f:
+                        env = i / a_f
+                    if i > note_frames - r_f:
+                        env = min(env, (note_frames - i) / r_f)
                     frames += struct.pack(
                         "<h", int(_osc_sample(phase, wave_shape) * amp * env)
                     )
             w.writeframes(bytes(frames))
+            total_samples += step_frames
 
 
 def play_pre_rendered_wav(path: Path):

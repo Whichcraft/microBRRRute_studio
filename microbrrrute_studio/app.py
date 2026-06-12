@@ -1770,7 +1770,11 @@ class MbseqStudio(tk.Tk):
             self.push_undo()
             self.project = MbseqProject.parse(self.raw.get("1.0", "end"))
             self.slot.set(1)
-            self.bank_name_var.set(self.project.bank_names.get(1, "Bank 1"))
+            self.bank_name_var.set(
+                self.project.bank_names.get(
+                    int(self.slot.get()), f"Bank {self.slot.get()}"
+                )
+            )
             self.mark_dirty()
             self.cursor.set(0)
             self.refresh_all()
@@ -1836,7 +1840,7 @@ class MbseqStudio(tk.Tk):
     def _play_tick(self) -> None:
         if not self.playing:
             return
-        steps = self.steps()
+        steps = self.steps()[:self.bank_length.get()]
         div = 4 if self.step_res.get() == "1/16" else 2
         ms = int(60000 / max(1, self.tempo.get()) / div)
         if not steps or self._play_idx >= len(steps):

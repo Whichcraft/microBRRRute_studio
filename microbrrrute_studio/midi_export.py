@@ -26,8 +26,9 @@ def export_midi(path: str | Path, steps: list[int | None], bpm: int = 120, ticks
         if note is None:
             pending += ticks_per_step
             continue
-        track += vlq(pending) + bytes([0x90, note, 100])
-        track += vlq(note_len) + bytes([0x80, note, 0])
+        n = max(0, min(127, note))
+        track += vlq(pending) + bytes([0x90, n, 100])
+        track += vlq(note_len) + bytes([0x80, n, 0])
         pending = rest_tail
     track += vlq(pending) + b'\xff\x2f\x00'
     header = b'MThd' + (6).to_bytes(4,'big') + (0).to_bytes(2,'big') + (1).to_bytes(2,'big') + tpq.to_bytes(2,'big')
