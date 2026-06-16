@@ -33,6 +33,7 @@ from .synth import (
 from .midi_export import export_midi, export_song_midi, import_midi
 
 MAX_STEPS = 64
+APP_TITLE = "microBRRRute Studio - MicroBrute SE Composer"
 WHITE_OFFSETS = [0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 17, 19, 21, 23, 24]
 BLACK_OFFSETS = [1, 3, 6, 8, 10, 13, 15, 18, 20, 22]
 BLACK_POS = {
@@ -71,9 +72,17 @@ class ToolTip:
     def show_tip(self):
         if self.tip_window or not self.text:
             return
-        x, y, _, _ = self.widget.bbox("insert")
-        x += self.widget.winfo_rootx() + 25
-        y += self.widget.winfo_rooty() + 25
+        try:
+            bbox = self.widget.bbox("insert")
+        except Exception:
+            bbox = None
+        if bbox:
+            x, y, _, _ = bbox
+            x += self.widget.winfo_rootx() + 25
+            y += self.widget.winfo_rooty() + 25
+        else:
+            x = self.widget.winfo_rootx() + max(20, self.widget.winfo_width() // 2)
+            y = self.widget.winfo_rooty() + self.widget.winfo_height() + 8
         self.tip_window = tw = tk.Toplevel(self.widget)
         tw.wm_overrideredirect(True)
         tw.wm_geometry(f"+{x}+{y}")
@@ -97,7 +106,7 @@ class ToolTip:
 class MbseqStudio(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
-        self.title("microBRRRute Studio - MicroBrute SE Composer")
+        self.title(APP_TITLE)
         self.geometry("1380x950")
         self.minsize(1100, 800)
         self._set_icon()
@@ -107,6 +116,7 @@ class MbseqStudio(tk.Tk):
         self.slot = tk.IntVar(value=1)
         self.bank_name_var = tk.StringVar(value="Bank 1")
         self.cursor = tk.IntVar(value=0)
+        self.cursor_display = tk.IntVar(value=1)
         self.octave_shift = tk.IntVar(value=0)
         self.root_note = 48
         self.tempo = tk.IntVar(value=120)
@@ -153,6 +163,8 @@ class MbseqStudio(tk.Tk):
 
         self._setup_dnd()
         self._build()
+        if self.dark_mode.get():
+            self.toggle_theme()
         self._bind_keys()
         self.protocol("WM_DELETE_WINDOW", self.on_close)
         self.refresh_all()
@@ -207,18 +219,27 @@ class MbseqStudio(tk.Tk):
             top,
             from_=1,
             to=MAX_STEPS,
-            textvariable=self.cursor,
+            textvariable=self.cursor_display,
             width=5,
-            command=self.refresh_grid,
+            command=self._apply_cursor_display,
         )
         sp.pack(side="left", padx=(4, 14))
+        sp.bind("<FocusOut>", lambda e: self._apply_cursor_display())
+        sp.bind("<Return>", lambda e: self._apply_cursor_display())
         ToolTip(sp, "Edit cursor position")
 
         ttk.Label(top, text="Len").pack(side="left", padx=(8, 2))
         ls = ttk.Spinbox(
-            top, from_=1, to=MAX_STEPS, textvariable=self.bank_length, width=4
+            top,
+            from_=1,
+            to=MAX_STEPS,
+            textvariable=self.bank_length,
+            width=4,
+            command=self._change_bank_length,
         )
         ls.pack(side="left")
+        ls.bind("<FocusOut>", lambda e: self._change_bank_length())
+        ls.bind("<Return>", lambda e: self._change_bank_length())
         ToolTip(ls, "Bank length")
 
         b = ttk.Button(top, text="Open", command=self.open_file)
@@ -241,6 +262,18 @@ class MbseqStudio(tk.Tk):
         ttk.Checkbutton(top, text="Metronome", variable=self.metronome).pack(
             side="left", padx=3
         )
+        ttk.Checkbutton(top, text="Count-in", variable=self.count_in).pack(
+            side="left", padx=3
+        )
+        ttk.Label(top, text="Res").pack(side="left", padx=(10, 2))
+        for label, value in [("1/8", "1/8"), ("1/16", "1/16")]:
+            ttk.Radiobutton(
+                top,
+                text=label,
+                value=value,
+                variable=self.step_res,
+                command=self._save_settings,
+            ).pack(side="left")
 
         dt = ttk.Checkbutton(
             top, text="Dark Mode", variable=self.dark_mode, command=self.toggle_theme
@@ -468,6 +501,49 @@ class MbseqStudio(tk.Tk):
             self.project.sequences[s] = [Step() for _ in range(MAX_STEPS)]
         return self.project.sequences[s]
 
+    def _active_length(self) -> int:
+        try:
+            length = int(self.bank_length.get())
+        except tk.TclError:
+            length = MAX_STEPS
+        length = max(1, min(MAX_STEPS, length))
+        try:
+            current = int(self.bank_length.get())
+        except tk.TclError:
+            current = None
+        if current != length:
+            self.bank_length.set(length)
+        return length
+
+    def active_steps(self, bank: int | None = None) -> list[Step]:
+        if bank is None:
+            steps = self.steps()
+        else:
+            steps = self.project.sequences.get(bank, [Step() for _ in range(MAX_STEPS)])
+        return steps[: self._active_length()]
+
+    def _sync_cursor_display(self) -> None:
+        self.cursor_display.set(self.cursor.get() + 1)
+
+    def _apply_cursor_display(self) -> None:
+        try:
+            display = int(self.cursor_display.get())
+        except (tk.TclError, ValueError):
+            display = self.cursor.get() + 1
+        active_len = len(self.active_steps())
+        self.cursor.set(max(0, min(active_len - 1, display - 1)))
+        self._sync_cursor_display()
+        self.refresh_grid()
+        self.refresh_piano_roll()
+
+    def _change_bank_length(self) -> None:
+        self._active_length()
+        if self.cursor.get() >= self._active_length():
+            self.cursor.set(self._active_length() - 1)
+        self._sync_cursor_display()
+        self._save_settings()
+        self.refresh_all()
+
     def note_for_index(self, idx: int) -> int:
         return max(0, min(127, self.root_note + self.octave_shift.get() * 12 + idx))
 
@@ -494,7 +570,7 @@ class MbseqStudio(tk.Tk):
         self.refresh_status()
 
     def _at_step_limit(self) -> bool:
-        if len(self.steps()) >= MAX_STEPS:
+        if self._active_length() >= MAX_STEPS:
             self.status.config(text=f"Bank full ({MAX_STEPS})")
             return True
         return False
@@ -553,8 +629,6 @@ class MbseqStudio(tk.Tk):
                 for k, v in data.items():
                     if hasattr(self, k):
                         getattr(self, k).set(v)
-                if self.dark_mode.get():
-                    self.toggle_theme()
             except Exception:
                 pass
 
@@ -566,8 +640,11 @@ class MbseqStudio(tk.Tk):
                     "volume",
                     "tempo",
                     "dark_mode",
+                    "count_in",
                     "wave_shape",
                     "step_res",
+                    "bank_length",
+                    "octave_shift",
                     "piano_roll_orientation",
                     "attack",
                     "decay",
@@ -629,6 +706,8 @@ class MbseqStudio(tk.Tk):
             self._save_recent()
             self._refresh_recent_menu()
             return
+        if not self._confirm_discard_changes():
+            return
         self._do_open(path)
 
     def refresh_status(self) -> None:
@@ -647,6 +726,7 @@ class MbseqStudio(tk.Tk):
         self.status.config(
             text=f"{p}{flag} | {name} | Steps {len(steps)} | Cursor {cur} | {range_warn}"
         )
+        self.title(("* " if self.dirty else "") + APP_TITLE)
 
     def show_settings_dialog(self) -> None:
         win = tk.Toplevel(self)
@@ -883,6 +963,7 @@ class MbseqStudio(tk.Tk):
 
     def mark_dirty(self) -> None:
         self.dirty = True
+        self.title("* " + APP_TITLE)
 
     def _snapshot(self) -> dict[int, list[Step]]:
         return {
@@ -1031,7 +1112,12 @@ class MbseqStudio(tk.Tk):
         if not p:
             return
         try:
-            export_midi(p, [step.note for step in self.steps()], bpm=self.tempo.get())
+            export_midi(
+                p,
+                [step.note for step in self.active_steps()],
+                bpm=self.tempo.get(),
+                ticks_per_step=self._ticks_per_step(),
+            )
         except Exception as e:
             messagebox.showerror("MIDI export failed", str(e))
 
@@ -1048,8 +1134,9 @@ class MbseqStudio(tk.Tk):
                 )
                 export_midi(
                     out / f"{base}_bank_{bank}.mid",
-                    [step.note for step in steps],
+                    [step.note for step in steps[: self._active_length()]],
                     bpm=self.tempo.get(),
+                    ticks_per_step=self._ticks_per_step(),
                 )
             messagebox.showinfo(
                 "Export complete", f"Exported 8 MIDI files to:\n{folder}"
@@ -1059,10 +1146,10 @@ class MbseqStudio(tk.Tk):
 
     def export_song_midi_file(self) -> None:
         banks = [
-            [s.note for s in self.project.sequences[b]]
+            [s.note for s in self.active_steps(b)]
             for b in range(1, 9)
             if b in self.project.sequences
-            and any(s.note is not None for s in self.project.sequences[b])
+            and any(s.note is not None for s in self.active_steps(b))
         ]
         if not banks:
             return
@@ -1071,7 +1158,12 @@ class MbseqStudio(tk.Tk):
         )
         if p:
             try:
-                export_song_midi(p, banks, bpm=self.tempo.get())
+                export_song_midi(
+                    p,
+                    banks,
+                    bpm=self.tempo.get(),
+                    ticks_per_step=self._ticks_per_step(),
+                )
             except Exception as e:
                 messagebox.showerror("Error", str(e))
 
@@ -1083,10 +1175,16 @@ class MbseqStudio(tk.Tk):
             try:
                 render_steps_wav(
                     p,
-                    self.steps(),
+                    self.active_steps(),
                     bpm=self.tempo.get(),
                     wave_shape=self.wave_shape.get(),
                     volume=self.volume.get(),
+                    attack=self.attack.get(),
+                    decay=self.decay.get(),
+                    sustain=self.sustain.get(),
+                    release=self.release.get(),
+                    metronome=self.metronome.get(),
+                    steps_per_quarter=self._step_divisor(),
                 )
             except Exception as e:
                 messagebox.showerror("Error", str(e))
@@ -1108,9 +1206,10 @@ class MbseqStudio(tk.Tk):
             self.refresh_piano_roll()
 
     def refresh_grid(self) -> None:
-        steps = self.steps()[:self.bank_length.get()]
+        steps = self.active_steps()
         if self.cursor.get() >= len(steps):
             self.cursor.set(max(0, len(steps) - 1))
+        self._sync_cursor_display()
         win_width = self.winfo_width()
         btn_width = 65
         cols = max(1, (win_width - 40) // btn_width)
@@ -1179,7 +1278,7 @@ class MbseqStudio(tk.Tk):
     ) -> tuple[float, float, float, float, float, float, float]:
         w = float(self.piano_roll.winfo_width())
         h = float(self.piano_roll.winfo_height())
-        steps = self.steps()
+        steps = self.active_steps()
         if self.piano_roll_orientation.get() == "vertical":
             keyboard_size = 50.0
             draw_w = max(1.0, w)
@@ -1199,7 +1298,7 @@ class MbseqStudio(tk.Tk):
         if self.piano_roll_orientation.get() == "vertical":
             content_w = note_size * (MAX_PLAYABLE - MIN_PLAYABLE + 1)
         else:
-            content_w = step_size * len(self.steps())
+            content_w = step_size * len(self.active_steps())
         self._piano_roll_off_x = min(
             0.0,
             max(min(0.0, draw_w - content_w), self._piano_roll_off_x),
@@ -1239,7 +1338,7 @@ class MbseqStudio(tk.Tk):
         w, h, keyboard_size, _, _, step_size, note_size = self._piano_roll_metrics()
         if w < 10 or h < 10:
             return
-        steps = self.steps()
+        steps = self.active_steps()
         cursor_note = None
         if 0 <= self.cursor.get() < len(steps):
             cursor_note = steps[self.cursor.get()].note
@@ -1556,7 +1655,7 @@ class MbseqStudio(tk.Tk):
             low_note, high_note = sorted((start_note, end_note))
             matched = {
                 i
-                for i, step in enumerate(self.steps())
+                for i, step in enumerate(self.active_steps())
                 if first_step <= i <= last_step
                 and step.note is not None
                 and low_note <= step.note <= high_note
@@ -1577,7 +1676,7 @@ class MbseqStudio(tk.Tk):
         self.refresh_piano_roll()
 
     def _on_piano_roll_click(self, event: tk.Event) -> None:
-        steps = self.steps()
+        steps = self.active_steps()
         step_idx, note_val = self._piano_roll_position(event.x, event.y)
         if 0 <= step_idx < len(steps) and MIN_PLAYABLE <= note_val <= MAX_PLAYABLE:
             self.select_step(step_idx)
@@ -1690,7 +1789,10 @@ class MbseqStudio(tk.Tk):
         self.refresh_all()
 
     def move_cursor(self, delta: int, refresh=True) -> None:
-        self.cursor.set(max(0, min(len(self.steps()) - 1, self.cursor.get() + delta)))
+        self.cursor.set(
+            max(0, min(len(self.active_steps()) - 1, self.cursor.get() + delta))
+        )
+        self._sync_cursor_display()
         if refresh:
             self.refresh_grid()
             self.refresh_piano_roll()
@@ -1711,14 +1813,18 @@ class MbseqStudio(tk.Tk):
     def add_step(self) -> None:
         if not self._at_step_limit():
             self.push_undo()
+            active_len = self._active_length()
             pos = (
-                sorted(self._selection)[0] + 1
+                min(sorted(self._selection)[0] + 1, active_len)
                 if self._selection
-                else self.cursor.get() + 1
+                else min(self.cursor.get() + 1, active_len)
             )
             self.steps().insert(pos, Step())
+            del self.steps()[MAX_STEPS:]
+            self.bank_length.set(min(MAX_STEPS, active_len + 1))
             self.mark_dirty()
-            self.move_cursor(1)
+            self.cursor.set(pos)
+            self.refresh_all()
             self.refresh_raw()
 
     def delete_step(self) -> None:
@@ -1726,17 +1832,25 @@ class MbseqStudio(tk.Tk):
         if not steps:
             return
         self.push_undo()
+        active_len = self._active_length()
         if self._selection:
+            removed = 0
             for idx in sorted(list(self._selection), reverse=True):
-                if idx < len(steps):
+                if 0 <= idx < active_len and idx < len(steps):
                     steps.pop(idx)
+                    removed += 1
+            steps.extend(Step() for _ in range(MAX_STEPS - len(steps)))
+            self.bank_length.set(max(1, active_len - removed))
             self.clear_selection()
         else:
-            steps.pop(self.cursor.get())
+            idx = min(self.cursor.get(), active_len - 1)
+            steps.pop(idx)
+            steps.append(Step())
+            self.bank_length.set(max(1, active_len - 1))
         if not steps:
             steps.append(Step())
         self.mark_dirty()
-        self.cursor.set(min(self.cursor.get(), len(steps) - 1))
+        self.cursor.set(min(self.cursor.get(), self._active_length() - 1))
         self.refresh_all()
 
     def clear_slot(self) -> None:
@@ -1748,6 +1862,12 @@ class MbseqStudio(tk.Tk):
             self.mark_dirty()
             self.cursor.set(0)
             self.refresh_all()
+
+    def _confirm_discard_changes(self) -> bool:
+        return not self.dirty or messagebox.askokcancel(
+            "Unsaved changes",
+            "Discard unsaved changes?",
+        )
 
     def _do_open(self, p: str | Path) -> None:
         try:
@@ -1765,6 +1885,8 @@ class MbseqStudio(tk.Tk):
             messagebox.showerror("Error", str(e))
 
     def open_file(self) -> None:
+        if not self._confirm_discard_changes():
+            return
         p = filedialog.askopenfilename(filetypes=[("MBSEQ", "*.mbseq"), ("All", "*.*")])
         if p:
             self._do_open(p)
@@ -1809,6 +1931,9 @@ class MbseqStudio(tk.Tk):
     def _step_divisor(self) -> int:
         return 4 if self.step_res.get() == "1/16" else 2
 
+    def _ticks_per_step(self) -> int:
+        return 480 // self._step_divisor()
+
     def toggle_play(self) -> None:
         self.stop_sequence() if self.playing else self.play_sequence()
 
@@ -1819,8 +1944,7 @@ class MbseqStudio(tk.Tk):
 
     def _start_playback(self) -> None:
         bank = self._play_banks[0]
-        all_steps = self.project.sequences.get(bank, [Step() for _ in range(MAX_STEPS)])
-        steps = all_steps[:self.bank_length.get()]
+        steps = self.active_steps(bank)
         if not any(s.note is not None for s in steps):
             messagebox.showinfo("Info", "Bank empty")
             return
@@ -1869,7 +1993,7 @@ class MbseqStudio(tk.Tk):
     def _play_tick(self) -> None:
         if not self.playing:
             return
-        steps = self.steps()[:self.bank_length.get()]
+        steps = self.active_steps()
         ms = int(60000 / max(1, self.tempo.get()) / self._step_divisor())
         if not steps or self._play_idx >= len(steps):
             self._advance_bank()
@@ -1968,7 +2092,7 @@ class MbseqStudio(tk.Tk):
         self.select_step(idx, event)
 
     def select_step(self, idx: int, event: tk.Event | None = None) -> None:
-        steps = self.steps()
+        steps = self.active_steps()
         if not 0 <= idx < len(steps):
             return
         old_cursor = self.cursor.get()
@@ -2064,7 +2188,8 @@ class MbseqStudio(tk.Tk):
         win.grab_set()
         f = ttk.Frame(win, padding=20)
         f.pack(fill="both", expand=True)
-        target = tk.IntVar(value=1)
+        source = int(self.slot.get())
+        target = tk.IntVar(value=1 if source != 1 else 2)
         ttk.Label(f, text=f"Duplicate bank {self.slot.get()} to:").grid(row=0, column=0)
         ttk.Combobox(
             f,
@@ -2075,7 +2200,11 @@ class MbseqStudio(tk.Tk):
 
         def do():
             t = target.get()
-            if t == int(self.slot.get()) or not (1 <= t <= 8):
+            if not (1 <= t <= 8):
+                messagebox.showinfo("Duplicate", "Choose a bank from 1 to 8.", parent=win)
+                return
+            if t == source:
+                messagebox.showinfo("Duplicate", "Choose a different target bank.", parent=win)
                 return
             self.push_undo()
             self.project.sequences[t] = [

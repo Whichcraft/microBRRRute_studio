@@ -65,8 +65,19 @@ def import_midi(path: str | Path, ticks_per_step: int | None = None) -> list[int
     reasonable approximation for arbitrary monophonic MIDI.
     """
     data = Path(path).read_bytes()
+    if len(data) < 14:
+        raise ValueError('Truncated MIDI header')
     if data[:4] != b'MThd':
         raise ValueError('Not a Standard MIDI File (missing MThd header)')
+    header_len = int.from_bytes(data[4:8], 'big')
+    if header_len != 6:
+        raise ValueError('Unsupported MIDI header length')
+    fmt = int.from_bytes(data[8:10], 'big')
+    if fmt not in (0, 1):
+        raise ValueError('Only MIDI format 0 and 1 files are supported')
+    track_count = int.from_bytes(data[10:12], 'big')
+    if track_count < 1:
+        raise ValueError('MIDI file contains no tracks')
     division = int.from_bytes(data[12:14], 'big')
     if division & 0x8000:
         raise ValueError('SMPTE time division is not supported')
@@ -83,6 +94,8 @@ def import_midi(path: str | Path, ticks_per_step: int | None = None) -> list[int
         length = int.from_bytes(data[i+4:i+8], 'big')
         i += 8
         end = i + length
+        if end > len(data):
+            raise ValueError('Truncated MIDI track chunk')
         t = 0
         status = 0
         while i < end:
