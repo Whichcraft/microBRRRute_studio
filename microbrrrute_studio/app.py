@@ -8,6 +8,11 @@ import uuid
 import tempfile
 import sys
 import random
+import threading
+import urllib.request
+import urllib.error
+import zipfile
+import webbrowser
 
 if sys.platform == "win32":
     import ctypes
@@ -133,6 +138,7 @@ class MbseqStudio(tk.Tk):
         self.decay = tk.DoubleVar(value=0.1)
         self.sustain = tk.DoubleVar(value=0.5)
         self.release = tk.DoubleVar(value=0.05)
+        self.auto_update = tk.BooleanVar(value=True)
         self.playing = False
 
         self._load_settings()
@@ -168,6 +174,7 @@ class MbseqStudio(tk.Tk):
         self._bind_keys()
         self.protocol("WM_DELETE_WINDOW", self.on_close)
         self.refresh_all()
+        self.after(1000, self.check_for_updates)
 
     def _set_icon(self) -> None:
         icon_dir = Path(__file__).parent.parent
@@ -462,6 +469,7 @@ class MbseqStudio(tk.Tk):
         )
         vm.add_separator()
         vm.add_command(label="Settings...", command=self.show_settings_dialog)
+        vm.add_command(label="Check for Updates...", command=lambda: self.check_for_updates(manual=True))
         m.add_cascade(label="View", menu=vm)
         self.config(menu=m)
 
@@ -650,6 +658,7 @@ class MbseqStudio(tk.Tk):
                     "decay",
                     "sustain",
                     "release",
+                    "auto_update",
                 ]
             }
             self._settings_path().write_text(json.dumps(d), encoding="utf-8")
@@ -731,7 +740,7 @@ class MbseqStudio(tk.Tk):
     def show_settings_dialog(self) -> None:
         win = tk.Toplevel(self)
         win.title("App Settings")
-        win.geometry("400x450")
+        win.geometry("400x480")
         win.resizable(False, False)
         win.transient(self)
         win.grab_set()
@@ -739,6 +748,9 @@ class MbseqStudio(tk.Tk):
         f.pack(fill="both", expand=True)
         ttk.Checkbutton(
             f, text="Dark Mode", variable=self.dark_mode, command=self.toggle_theme
+        ).pack(anchor="w", pady=5)
+        ttk.Checkbutton(
+            f, text="Auto-update on startup", variable=self.auto_update, command=self._save_settings
         ).pack(anchor="w", pady=5)
         ttk.Label(f, text="Volume").pack(anchor="w")
         ttk.Scale(f, from_=0.0, to=0.8, variable=self.volume, orient="horizontal").pack(
@@ -762,6 +774,230 @@ class MbseqStudio(tk.Tk):
                 env, from_=p[2], to=p[3], variable=p[1], orient="horizontal"
             ).pack(fill="x")
         ttk.Button(f, text="Close", command=win.destroy).pack(side="bottom", pady=10)
+
+    def check_for_updates(self, manual: bool = False) -> None:
+        if not manual and not self.auto_update.get():
+            return
+        threading.Thread(target=self._run_update_check, args=(manual,), daemon=True).start()
+
+    def _run_update_check(self, manual: bool) -> None:
+        try:
+            url = "https://api.github.com/repos/Whichcraft/microBRRRute_studio/releases/latest"
+            req = urllib.request.Request(url, headers={"User-Agent": "microBRRRute-Studio-Updater"})
+            with urllib.request.urlopen(req, timeout=10) as response:
+                data = json.loads(response.read().decode("utf-8"))
+            
+            latest_tag = data.get("tag_name", "")
+            if not latest_tag:
+                if manual:
+                    self.after(0, lambda: messagebox.showerror("Update Check", "Could not fetch release information from GitHub."))
+                return
+            
+            from . import __version__ as current_version
+            
+            if self._is_newer_version(current_version, latest_tag):
+                self.after(0, lambda: self._prompt_update(data))
+            else:
+                if manual:
+                    self.after(0, lambda: messagebox.showinfo(
+                        "Up to Date",
+                        f"You are up to date!\n\n"
+                        f"microBRRRute Studio v{current_version} is the latest version."
+                    ))
+        except Exception as e:
+            if manual:
+                err_msg = str(e)
+                self.after(0, lambda: messagebox.showerror(
+                    "Update Check Failed",
+                    f"An error occurred while checking for updates:\n\n{err_msg}"
+                ))
+
+    @staticmethod
+    def _is_newer_version(current: str, latest: str) -> bool:
+        def parse_v(v_str: str) -> list[int]:
+            cleaned = v_str.strip().lower()
+            if cleaned.startswith("v"):
+                cleaned = cleaned[1:]
+            parts = []
+            for x in cleaned.split("."):
+                x_clean = "".join(char for char in x if char.isdigit())
+                parts.append(int(x_clean) if x_clean else 0)
+            return parts
+        v_curr = parse_v(current)
+        v_late = parse_v(latest)
+        max_len = max(len(v_curr), len(v_late))
+        v_curr += [0] * (max_len - len(v_curr))
+        v_late += [0] * (max_len - len(v_late))
+        return v_late > v_curr
+
+    def _prompt_update(self, release_data: dict) -> None:
+        latest_version = release_data.get("tag_name", "unknown")
+        ans = messagebox.askyesno(
+            "Update Available",
+            f"A new version ({latest_version}) of microBRRRute Studio is available.\n\n"
+            "Would you like to download and install the update now?"
+        )
+        if ans:
+            threading.Thread(target=self._perform_update, args=(release_data,), daemon=True).start()
+
+    def _perform_update(self, release_data: dict) -> None:
+        assets = release_data.get("assets", [])
+        download_url = None
+        asset_name = None
+        
+        sys_plat = sys.platform
+        if sys_plat == "win32":
+            platform_keyword = "windows"
+        elif sys_plat == "darwin":
+            platform_keyword = "macos"
+        else:
+            platform_keyword = "linux"
+            
+        for asset in assets:
+            name = asset.get("name", "").lower()
+            if platform_keyword in name and name.endswith(".zip"):
+                download_url = asset.get("browser_download_url")
+                asset_name = asset.get("name")
+                break
+                
+        is_frozen = getattr(sys, "frozen", False)
+        
+        if not download_url or not is_frozen:
+            self.after(0, lambda: self._open_release_webpage(release_data.get("html_url")))
+            return
+            
+        self.after(0, lambda: self._show_update_progress_ui(asset_name or ""))
+        
+        try:
+            import io
+            req = urllib.request.Request(download_url, headers={"User-Agent": "microBRRRute-Studio-Updater"})
+            
+            with urllib.request.urlopen(req, timeout=30) as response:
+                total_size = int(response.info().get('Content-Length', 0))
+                downloaded = 0
+                buffer = io.BytesIO()
+                block_size = 1024 * 64
+                
+                while True:
+                    block = response.read(block_size)
+                    if not block:
+                        break
+                    buffer.write(block)
+                    downloaded += len(block)
+                    if total_size > 0:
+                        pct = int(downloaded * 100 / total_size)
+                        self.after(0, self._update_progress_val, pct)
+                        
+            self.after(0, lambda: self._update_progress_status("Extracting update..."))
+            
+            buffer.seek(0)
+            with zipfile.ZipFile(buffer) as z:
+                exe_name = "microBRRRute_Studio.exe" if sys_plat == "win32" else "microBRRRute_Studio"
+                
+                exe_member = None
+                for member in z.namelist():
+                    if member.endswith(exe_name):
+                        exe_member = member
+                        break
+                        
+                if not exe_member:
+                    raise Exception(f"Executable {exe_name} not found in the downloaded zip archive.")
+                
+                exe_data = z.read(exe_member)
+                
+            current_exe = Path(sys.executable).absolute()
+            
+            self.after(0, lambda: self._update_progress_status("Replacing executable..."))
+            
+            if sys_plat == "win32":
+                old_exe = current_exe.with_name(current_exe.name + ".old")
+                if old_exe.exists():
+                    try:
+                        old_exe.unlink()
+                    except Exception:
+                        pass
+                
+                current_exe.rename(old_exe)
+                current_exe.write_bytes(exe_data)
+                
+                self.after(0, lambda: self._finish_update_and_restart(True, old_exe))
+            else:
+                temp_exe = current_exe.with_name(current_exe.name + ".tmp")
+                temp_exe.write_bytes(exe_data)
+                temp_exe.chmod(0o755)
+                temp_exe.replace(current_exe)
+                
+                self.after(0, lambda: self._finish_update_and_restart(False, None))
+                
+        except Exception as e:
+            self.after(0, self._handle_update_error, str(e))
+
+    def _open_release_webpage(self, url: str | None) -> None:
+        target_url = url or "https://github.com/Whichcraft/microBRRRute_studio/releases/latest"
+        ans = messagebox.askyesno(
+            "Auto-update Not Supported",
+            "Auto-update is only supported when running the pre-built standalone executable.\n\n"
+            "Would you like to open the latest release webpage in your browser instead?"
+        )
+        if ans:
+            webbrowser.open(target_url)
+
+    def _show_update_progress_ui(self, asset_name: str) -> None:
+        self.update_win = tk.Toplevel(self)
+        self.update_win.title("Downloading Update")
+        self.update_win.geometry("350x150")
+        self.update_win.resizable(False, False)
+        self.update_win.transient(self)
+        self.update_win.grab_set()
+        
+        self.update_win.protocol("WM_DELETE_WINDOW", lambda: None)
+        
+        f = ttk.Frame(self.update_win, padding=20)
+        f.pack(fill="both", expand=True)
+        
+        self.update_label = ttk.Label(f, text=f"Downloading {asset_name}...", wraplength=310)
+        self.update_label.pack(anchor="w", pady=5)
+        
+        self.update_progress = ttk.Progressbar(f, orient="horizontal", mode="determinate")
+        self.update_progress.pack(fill="x", pady=10)
+        
+        self.update_status = ttk.Label(f, text="Connecting...")
+        self.update_status.pack(anchor="w")
+
+    def _update_progress_val(self, val: int) -> None:
+        if hasattr(self, "update_progress") and self.update_progress.winfo_exists():
+            self.update_progress["value"] = val
+            self.update_status.config(text=f"Downloaded {val}%")
+
+    def _update_progress_status(self, text: str) -> None:
+        if hasattr(self, "update_status") and self.update_status.winfo_exists():
+            self.update_status.config(text=text)
+
+    def _handle_update_error(self, err_msg: str) -> None:
+        if hasattr(self, "update_win") and self.update_win.winfo_exists():
+            self.update_win.destroy()
+        messagebox.showerror("Update Error", f"An error occurred during update:\n\n{err_msg}")
+
+    def _finish_update_and_restart(self, is_windows: bool, old_exe_path: Path | None) -> None:
+        if hasattr(self, "update_win") and self.update_win.winfo_exists():
+            self.update_win.destroy()
+            
+        messagebox.showinfo("Update Successful", "The update has been successfully installed. The application will now restart.")
+        
+        self.stop_sequence()
+        
+        import subprocess
+        current_exe = sys.executable
+        
+        if is_windows and old_exe_path:
+            cmd = f'timeout /t 1 /nobreak > nul & del "{old_exe_path}"'
+            subprocess.Popen(cmd, shell=True, creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0)
+            subprocess.Popen([current_exe])
+        else:
+            subprocess.Popen([current_exe])
+            
+        self.destroy()
+        sys.exit(0)
 
     def show_randomizer_dialog(self) -> None:
         win = tk.Toplevel(self)

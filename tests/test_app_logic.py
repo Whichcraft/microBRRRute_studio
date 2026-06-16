@@ -56,3 +56,16 @@ def test_parse_step_tokens_rejects_bad_or_out_of_range_tokens():
         except ValueError:
             continue
         raise AssertionError(f"expected ValueError for {tokens!r}")
+
+
+def test_is_newer_version():
+    assert MbseqStudio._is_newer_version("1.0.0", "1.0.1") is True
+    assert MbseqStudio._is_newer_version("1.0.0", "v1.0.1") is True
+    assert MbseqStudio._is_newer_version("1.0.0", "1.0.0") is False
+    assert MbseqStudio._is_newer_version("1.0.0", "v1.0") is False
+    assert MbseqStudio._is_newer_version("1.0.1", "1.0.0") is False
+    assert MbseqStudio._is_newer_version("1.0.0", "2.0.0") is True
+    assert MbseqStudio._is_newer_version("0.11.12", "0.12.0") is True
+    assert MbseqStudio._is_newer_version("1.0.0-beta", "1.0.0") is False
+    assert MbseqStudio._is_newer_version("1", "1.0.1") is True
+
