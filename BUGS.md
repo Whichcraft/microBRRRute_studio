@@ -2,4 +2,4 @@
 
 No known open bugs.
 
-Resolved items have been moved to `CHANGELOG.md`.
+Resolved findings have been moved to `CHANGELOG.md`.

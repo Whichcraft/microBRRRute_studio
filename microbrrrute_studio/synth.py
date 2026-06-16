@@ -24,7 +24,8 @@ _error_lock = threading.Lock()
 _IS_WINDOWS = sys.platform.startswith("win")
 _IS_MAC = sys.platform == "darwin"
 _lock = threading.Lock()
-_active_procs: set[subprocess.Popen] = set()
+_playback_procs: set[subprocess.Popen] = set()
+_preview_procs: set[subprocess.Popen] = set()
 
 
 def get_last_audio_error() -> str | None:
@@ -103,7 +104,7 @@ def render_steps_to_data(
     """
     step_secs = 60.0 / max(1, bpm) / max(1, steps_per_quarter)
     step_frames = max(1, int(step_secs * sample_rate))
-    click_amp = int(32767 * 0.3)
+    click_level = 0.10
 
     # Global ADSR frames
     a_f = max(1, int(attack * sample_rate))
@@ -123,14 +124,14 @@ def render_steps_to_data(
             for i in range(min(click_len, step_frames)):
                 phase = (f * (i / sample_rate)) % 1.0
                 env = 1.0 - (i / click_len)
-                frames[i] += math.sin(2 * math.pi * phase) * 0.10 * env
+                frames[i] += math.sin(2 * math.pi * phase) * click_level * env
 
         if s.note is not None:
             freq = midi_freq(s.note)
             gate = max(0.0, min(s.gate, 1.0))
             note_frames = max(1, int(step_frames * gate))
             step_amp = volume * 1.5 if s.accent else volume
-            amp_scaled = int(32767 * max(0.0, min(step_amp, 1.0)))
+            amp_norm = max(0.0, min(step_amp, 1.0))
 
             has_slide = (
                 s.slide and (idx + 1 < len(steps)) and (steps[idx + 1].note is not None)
@@ -154,15 +155,11 @@ def render_steps_to_data(
                 if not has_slide and i > note_frames - r_f:
                     env = min(env, sustain * (note_frames - i) / r_f)
 
-                frames[i] += val * env
+                frames[i] += val * env * amp_norm
 
-            for f in frames:
-                v = max(-1.0, min(1.0, f))
-                all_frames += struct.pack("<h", int(v * amp_scaled))
-        else:
-            for f in frames:
-                v = max(-1.0, min(1.0, f))
-                all_frames += struct.pack("<h", int(v * click_amp))
+        for f in frames:
+            v = max(-1.0, min(1.0, f))
+            all_frames += struct.pack("<h", int(v * 32767))
 
         total_samples += step_frames
 
@@ -183,48 +180,29 @@ def render_steps_wav(
     bpm: int = 120,
     wave_shape: str = "square",
     volume: float = 0.25,
+    attack: float = 0.005,
+    decay: float = 0.1,
+    sustain: float = 0.5,
+    release: float = 0.05,
     sample_rate: int = 44100,
+    metronome: bool = False,
+    steps_per_quarter: int = 2,
 ) -> None:
-    """Bounce a step list to a single WAV file (offline render, no playback).
-
-    Each step lasts an eighth note at the given tempo; notes sound for `gate` of
-    the step and rests/tails are silence.
-    """
-    step_secs = 60.0 / max(1, bpm) / 2
-    step_frames = max(1, int(step_secs * sample_rate))
-    amp = int(32767 * max(0.0, min(volume, 1.0)))
-    total_samples = 0
-    with wave.open(str(path), "wb") as w:
-        w.setnchannels(1)
-        w.setsampwidth(2)
-        w.setframerate(sample_rate)
-        for step in steps:
-            frames = bytearray()
-            if step.note is None:
-                frames += b"\x00\x00" * step_frames
-            else:
-                note_frames = max(
-                    1,
-                    int(step_frames * max(0.0, min(step.gate, 1.0))),
-                )
-                a_f = min(max(1, int(0.008 * sample_rate)), note_frames // 2)
-                r_f = min(max(1, int(0.035 * sample_rate)), note_frames // 2)
-                freq = midi_freq(step.note)
-                for i in range(step_frames):
-                    if i >= note_frames:
-                        frames += b"\x00\x00"
-                        continue
-                    phase = (freq * ((total_samples + i) / sample_rate)) % 1.0
-                    env = 1.0
-                    if i < a_f:
-                        env = i / a_f
-                    if i > note_frames - r_f:
-                        env = min(env, (note_frames - i) / r_f)
-                    frames += struct.pack(
-                        "<h", int(_osc_sample(phase, wave_shape) * amp * env)
-                    )
-            w.writeframes(bytes(frames))
-            total_samples += step_frames
+    """Bounce a step list to a single WAV file using the playback renderer."""
+    data = render_steps_to_data(
+        steps,
+        bpm=bpm,
+        wave_shape=wave_shape,
+        volume=volume,
+        attack=attack,
+        decay=decay,
+        sustain=sustain,
+        release=release,
+        sample_rate=sample_rate,
+        metronome=metronome,
+        steps_per_quarter=steps_per_quarter,
+    )
+    render_pre_rendered_wav(Path(path), data, sample_rate)
 
 
 def play_pre_rendered_wav(path: Path):
@@ -243,7 +221,7 @@ def play_pre_rendered_wav(path: Path):
                 )  # type: ignore
                 time.sleep(duration + 0.1)
             else:
-                _play_unix(path, duration)
+                _play_unix(path, duration, _playback_procs)
         except Exception:
             pass
 
@@ -264,9 +242,14 @@ def stop_all() -> None:
         except Exception:
             pass
         return
+    _stop_procs(_playback_procs)
+    _stop_procs(_preview_procs)
+
+
+def _stop_procs(proc_set: set[subprocess.Popen]) -> None:
     with _lock:
-        procs = list(_active_procs)
-        _active_procs.clear()
+        procs = list(proc_set)
+        proc_set.clear()
     for p in procs:
         try:
             p.terminate()
@@ -274,7 +257,9 @@ def stop_all() -> None:
             pass
 
 
-def _play_unix(tmp: Path, duration: float) -> None:
+def _play_unix(
+    tmp: Path, duration: float, proc_set: set[subprocess.Popen]
+) -> None:
     global _last_error
     players = (
         [["afplay", str(tmp)]]
@@ -289,7 +274,7 @@ def _play_unix(tmp: Path, duration: float) -> None:
             errors.append(str(exc))
             continue
         with _lock:
-            _active_procs.add(p)
+            proc_set.add(p)
         try:
             _, err = p.communicate(timeout=max(1.0, duration + 3))
         except subprocess.TimeoutExpired:
@@ -297,7 +282,7 @@ def _play_unix(tmp: Path, duration: float) -> None:
             err = b""
         finally:
             with _lock:
-                _active_procs.discard(p)
+                proc_set.discard(p)
         if p.returncode == 0:
             with _error_lock:
                 _last_error = None
@@ -338,7 +323,8 @@ def play_note(
                 with _error_lock:
                     _last_error = None
             else:
-                _play_unix(tmp, duration)
+                _stop_procs(_preview_procs)
+                _play_unix(tmp, duration, _preview_procs)
         except Exception as exc:
             with _error_lock:
                 _last_error = str(exc)

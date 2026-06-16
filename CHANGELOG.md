@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- **Piano Roll ignored bank length** — grid, Piano Roll drawing, hit-testing,
+  playback, and selection now share the same active bank-length helper.
+- **Exports ignored active length and resolution** — bank MIDI, all-bank MIDI,
+  song MIDI, and bank WAV exports now use the active step count and 1/8 vs
+  1/16 timing.
+- **Count-in and 1/16 controls were hidden** — added top-bar controls for
+  count-in and step resolution, with persistent settings.
+- **Dark mode startup mismatch** — saved dark-mode settings are now applied
+  after widgets are built.
+- **Cursor spinbox was off by one** — the visible cursor control is now
+  1-based while the internal cursor remains zero-based.
+- **Malformed MIDI headers imported silently** — MIDI import now validates the
+  full Standard MIDI File header and rejects truncated track chunks.
+- **Metronome clicks depended on synth volume** — clicks are mixed
+  independently, so note-step clicks remain audible when note volume is zero.
+- **Preview notes overlapped on Linux/macOS** — preview audio now uses its own
+  tracked subprocess set and stops the previous preview before starting a new
+  one.
+- **Duplicate-bank default was a no-op** — the dialog now defaults to a
+  different target bank and reports invalid/self-copy choices.
+- **Per-step attributes were lost on save/load** — gate, accent, and slide now
+  round-trip in `.mbseq` using inline step tokens without emitting comments.
+- **Parser accepted hidden bank slots** — `.mbseq` parsing now rejects bank
+  slots outside 1..8 and duplicate slot lines.
+- **WAV export diverged from playback rendering** — offline WAV export now uses
+  the same ADSR, accent, slide, metronome, and step-resolution renderer as
+  playback.
+- **Opening files discarded dirty projects** — opening recent or chosen files
+  now asks before replacing unsaved work.
+- **Dirty state was not visible in the title bar** — unsaved projects now show
+  a leading `*` in the window title.
+- **Tooltips assumed text-widget APIs** — tooltip placement now falls back to
+  widget geometry for controls that do not support insert bounding boxes.
+- **Add/delete step ignored active length** — structural edits now grow/shrink
+  the active bank length while preserving the 64-step storage limit.
 - **Selection paste partial mutation** — clipboard contents are now fully
   parsed and MIDI-range validated before any selected steps are changed.
 - **Whole-bank paste accepted invalid MIDI notes** — pasted bank data now

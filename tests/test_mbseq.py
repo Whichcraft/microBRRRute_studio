@@ -31,6 +31,19 @@ def test_parse_roundtrip():
     assert MbseqProject.parse(proj.serialize()).sequences == proj.sequences
 
 
+def test_parse_roundtrip_preserves_step_attributes_without_comments():
+    proj = MbseqProject.empty()
+    proj.sequences[1][0] = Step(60, gate=0.25, accent=True, slide=True)
+    proj.sequences[1][1] = Step(None, gate=0.5, accent=True)
+
+    text = proj.serialize()
+
+    assert "#" not in text
+    loaded = MbseqProject.parse(text)
+    assert loaded.sequences[1][0] == Step(60, gate=0.25, accent=True, slide=True)
+    assert loaded.sequences[1][1] == Step(None, gate=0.5, accent=True)
+
+
 def test_empty_has_eight_banks():
     proj = MbseqProject.empty()
     assert set(proj.sequences) == set(range(1, 9))
@@ -51,6 +64,24 @@ def test_serialize_always_writes_eight_banks():
 
 def test_parse_rejects_bad_note():
     for bad in ("1:128", "1:-1", "1:abc", "no colon"):
+        try:
+            MbseqProject.parse(bad)
+        except ValueError:
+            continue
+        raise AssertionError(f"expected ValueError for {bad!r}")
+
+
+def test_parse_rejects_bad_slots_and_duplicates():
+    for bad in ("0:60", "9:60", "1:60\n1:62"):
+        try:
+            MbseqProject.parse(bad)
+        except ValueError:
+            continue
+        raise AssertionError(f"expected ValueError for {bad!r}")
+
+
+def test_parse_rejects_bad_step_attributes():
+    for bad in ("1:60|1.2|0|0", "1:60|0.5|2|0", "1:60|bad|0|0"):
         try:
             MbseqProject.parse(bad)
         except ValueError:
@@ -175,6 +206,33 @@ def test_import_rejects_non_midi(tmp_path):
     raise AssertionError("expected ValueError for non-MIDI input")
 
 
+def test_import_rejects_truncated_midi_header(tmp_path):
+    p = tmp_path / "truncated.mid"
+    p.write_bytes(b"MThd")
+    try:
+        import_midi(p)
+    except ValueError:
+        return
+    raise AssertionError("expected ValueError for truncated MIDI header")
+
+
+def test_import_rejects_truncated_midi_track(tmp_path):
+    p = tmp_path / "bad_track.mid"
+    header = (
+        b"MThd"
+        + (6).to_bytes(4, "big")
+        + (0).to_bytes(2, "big")
+        + (1).to_bytes(2, "big")
+        + (480).to_bytes(2, "big")
+    )
+    p.write_bytes(header + b"MTrk" + (10).to_bytes(4, "big") + b"\x00")
+    try:
+        import_midi(p)
+    except ValueError:
+        return
+    raise AssertionError("expected ValueError for truncated MIDI track")
+
+
 def test_export_song_concatenates(tmp_path):
     p = tmp_path / "song.mid"
     export_song_midi(p, [[60, 62], [64, None, 67]], bpm=120)
@@ -203,3 +261,21 @@ def test_render_steps_to_data_honors_step_resolution():
 
     assert len(eighth) == 2 * int(0.25 * 44100) * 2
     assert len(sixteenth) == 2 * int(0.125 * 44100) * 2
+
+
+def test_render_steps_to_data_keeps_metronome_independent_of_volume():
+    data = render_steps_to_data([Step(60)], volume=0.0, metronome=True)
+
+    assert data != b"\x00" * len(data)
+
+
+def test_render_steps_wav_honors_step_resolution(tmp_path):
+    p = tmp_path / "sixteenth.wav"
+    render_steps_wav(
+        p,
+        [Step(60), Step(None)],
+        bpm=120,
+        steps_per_quarter=4,
+    )
+    with wave.open(str(p)) as w:
+        assert abs(w.getnframes() - int(2 * 0.125 * 44100)) <= 3
