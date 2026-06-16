@@ -88,6 +88,8 @@ def import_midi(path: str | Path, ticks_per_step: int | None = None) -> list[int
         while i < end:
             delta, i = read_vlq(data, i, end)
             t += delta
+            if i >= end:
+                break
             b = data[i]
             if b & 0x80:
                 status = b
@@ -101,10 +103,8 @@ def import_midi(path: str | Path, ticks_per_step: int | None = None) -> list[int
                 i += mlen
                 status = 0
             elif status == 0xF0 or status == 0xF7:  # SysEx
-                while i < end and data[i] != 0xF7:
-                    i += 1
-                if i < end:
-                    i += 1  # skip terminator
+                sysex_len, i = read_vlq(data, i, end)
+                i = min(end, i + sysex_len)
                 status = 0
             elif status in (0xF1, 0xF3):  # 2-byte system messages
                 i += 1

@@ -52,8 +52,9 @@ Every version bump merged to `main` is built and published automatically by CI.
 - **ADSR Envelope Controls.** Fine-tune the synth's character with persistent
   Attack, Decay, Sustain, and Release settings.
 - **All 8 pattern banks with Custom Naming.** Switch between banks and give
-  them descriptive names (e.g. "Intro", "Verse"). Names are saved directly in
-  the `.mbseq` file.
+  them descriptive names (e.g. "Intro", "Verse"). Names are runtime-only and
+  reset to defaults on reload. Use **Edit → Duplicate Bank...** to copy the
+  current bank to another slot.
 - **On-screen 25-key MicroBrute keyboard.** Click to insert + audition a note,
   right-click to preview without editing, or play from your computer keyboard
   (`A W S E D F T G Y H U J K …`).
@@ -72,19 +73,24 @@ Every version bump merged to `main` is built and published automatically by CI.
   - **Click-and-drag reordering** — move steps by dragging them on the grid.
   - **Multi-step Selection** — select ranges using `Shift+Click` or multiple steps
     via `Ctrl+Click`.
-  - **Batch Operations** — transpose or delete the entire selection at once.
+  - **Batch Operations** — transpose or delete the entire selection at once,
+    including ±1 semitone, ±1 octave, and ±2 octave transpose buttons.
   - **Per-step Attributes** — right-click a step to set its **Gate Length**,
     **Accent**, or **Slide/Legato** status. Visual indicators (• for accent,
     → for slide) show directly on the grid.
   - **Configurable Bank Settings** — set the active bank length (1–64) and
     toggle between 1/8 and 1/16 note resolutions.
   - Add / delete steps, insert rests (`R`).
+  - Clipboard paste validates all notes before changing the pattern, so bad
+    tokens or out-of-range MIDI values cannot partially overwrite a bank.
   - **Undo / redo** (`Ctrl+Z` / `Ctrl+Y`) across every edit.
 - **Dark Mode.** High-contrast dark theme accessible via a toolbar toggle.
 - **Recent files menu.** Quick access to your 10 most recently used files.
-- **Raw text view.** Edit the underlying `.mbseq` text directly with validation.
-- **Import & export.** Import MIDI; export bank/song as MIDI; bounce bank to **WAV**.
-  (Anti-click protection and expressive rendering included).
+- **Raw text view and editor.** Edit the underlying `.mbseq` text directly with
+  an "Apply raw" button and `Ctrl+Enter` shortcut, including validation feedback.
+- **Import & export.** Import MIDI, including length-prefixed SysEx events;
+  export bank/song as MIDI; bounce bank to **WAV**. (Anti-click protection and
+  expressive rendering included).
 - **Unsaved-changes guard.** Title bar shows `*` and app warns before quitting.
 - **Tooltips.** Hover over any button for help.
 
@@ -114,6 +120,9 @@ Every version bump merged to `main` is built and published automatically by CI.
 The **Horizontal / Vertical** controls above the Piano Roll transpose the
 editor layout. Horizontal mode places time left-to-right; Vertical mode places
 time top-to-bottom. The chosen orientation is saved in app settings.
+
+Duplicate banks from **Edit → Duplicate Bank...**. The duplicate command copies
+notes and per-step attributes to a different bank slot.
 
 ### Arpeggiator
 
@@ -172,9 +181,9 @@ automatically prunes old versions to keep only the **latest** release active.
 
 ## 🧪 Tests
 
-Parsing, serialization, MIDI export, waveform generation, and Piano Roll
-coordinate logic are covered by headless tests that need no display or audio
-device:
+Parsing, serialization, MIDI import/export, waveform generation, playback
+timing, clipboard validation, and Piano Roll coordinate logic are covered by
+headless tests that need no display or audio device:
 
 ```bash
 pip install -e ".[dev]"
@@ -209,7 +218,7 @@ microbrrrute_studio/
   app.py          Tkinter UI + transport
   synth.py        Software synth + cross-platform, stoppable playback engine
   mbseq.py        .mbseq parse / serialize, MIDI note-name helpers
-  midi_export.py  Standard MIDI File writer
+  midi_export.py  Standard MIDI File import/export helpers
 tests/            Headless data-layer and Piano Roll logic tests
 main.py           Entry point
 ```

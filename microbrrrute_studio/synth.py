@@ -95,12 +95,13 @@ def render_steps_to_data(
     release: float = 0.05,
     sample_rate: int = 44100,
     metronome: bool = False,
+    steps_per_quarter: int = 2,
 ) -> bytes:
     """Render a step list to raw PCM data bytes.
 
     Includes anti-click fades, per-step gate/accent, ADSR envelope, and optional metronome clicks.
     """
-    step_secs = 60.0 / max(1, bpm) / 2
+    step_secs = 60.0 / max(1, bpm) / max(1, steps_per_quarter)
     step_frames = max(1, int(step_secs * sample_rate))
     click_amp = int(32767 * 0.3)
 

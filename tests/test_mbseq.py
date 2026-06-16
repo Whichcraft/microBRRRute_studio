@@ -9,7 +9,12 @@ from microbrrrute_studio.mbseq import (
     transpose_steps,
 )
 from microbrrrute_studio.midi_export import export_midi, export_song_midi, import_midi, vlq
-from microbrrrute_studio.synth import make_wave, midi_freq, render_steps_wav
+from microbrrrute_studio.synth import (
+    make_wave,
+    midi_freq,
+    render_steps_to_data,
+    render_steps_wav,
+)
 
 
 def test_parse_roundtrip():
@@ -126,6 +131,40 @@ def test_midi_roundtrip(tmp_path):
     assert import_midi(p) == [60, None, 64, 67, None, 72]
 
 
+def test_import_skips_length_prefixed_sysex(tmp_path):
+    p = tmp_path / "sysex.mid"
+    header = (
+        b"MThd"
+        + (6).to_bytes(4, "big")
+        + (0).to_bytes(2, "big")
+        + (1).to_bytes(2, "big")
+        + (480).to_bytes(2, "big")
+    )
+    track = bytes(
+        [
+            0,
+            0xF0,
+            1,
+            1,
+            0,
+            0x90,
+            60,
+            100,
+            0,
+            0x80,
+            60,
+            0,
+            0,
+            0xFF,
+            0x2F,
+            0,
+        ]
+    )
+    p.write_bytes(header + b"MTrk" + len(track).to_bytes(4, "big") + track)
+
+    assert import_midi(p) == [60]
+
+
 def test_import_rejects_non_midi(tmp_path):
     p = tmp_path / "bad.mid"
     p.write_bytes(b"not a midi file at all")
@@ -155,3 +194,12 @@ def test_render_steps_wav(tmp_path):
         # 3 steps * (eighth note at 120bpm = 0.25s) * 44100 frames
         assert abs(w.getnframes() - int(3 * 0.25 * 44100)) <= 3
         assert w.getnchannels() == 1
+
+
+def test_render_steps_to_data_honors_step_resolution():
+    steps = [Step(60), Step(None)]
+    eighth = render_steps_to_data(steps, bpm=120, steps_per_quarter=2)
+    sixteenth = render_steps_to_data(steps, bpm=120, steps_per_quarter=4)
+
+    assert len(eighth) == 2 * int(0.25 * 44100) * 2
+    assert len(sixteenth) == 2 * int(0.125 * 44100) * 2

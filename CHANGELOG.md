@@ -6,7 +6,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-_Nothing yet._
+### Fixed
+- **Selection paste partial mutation** — clipboard contents are now fully
+  parsed and MIDI-range validated before any selected steps are changed.
+- **Whole-bank paste accepted invalid MIDI notes** — pasted bank data now
+  rejects malformed and out-of-range notes before replacing the current bank.
+- **MIDI SysEx import skipped following events** — Standard MIDI file SysEx
+  events now use their VLQ payload length instead of scanning for a literal
+  terminator byte, preserving valid later note events.
+- **1/16 playback audio drift** — pre-rendered playback audio now uses the same
+  step resolution as the playhead timing.
+- **Failed raw-text apply polluted undo history** — raw `.mbseq` text is parsed
+  before an undo snapshot is pushed.
+- **Duplicate-bank dialog was unreachable** — added an Edit-menu entry for the
+  existing duplicate-bank workflow.
+
+## [0.13.0] - 2026-06-12
+
+### Added
+- Raw-text editor: "Apply raw" button with Ctrl+Enter binding for direct
+  `.mbseq` editing with validation.
+- Added C♭ (B) and F♭ (E) enharmonic equivalents to note-name parser.
+
+### Changed
+- Bank names (`# Name X:` headers) removed from `.mbseq` serialization.
+  Bank names are now runtime-only and reset to defaults on reload.
+- Metronome click volume reduced from 40% to 10% of full scale.
+
+### Fixed
+- **VLQ infinite loop on negative values** — `vlq()` now raises
+  `ValueError` for negative input.
+- **Gate>1.0 causes IndexError in audio render** — `s.gate` is now
+  clamped to [0.0, 1.0] in `render_steps_to_data`.
+- **MIDI running status corruption** — status byte is reset to 0 after
+  meta, SysEx, and system realtime messages to prevent stale bytes from
+  corrupting subsequent event parsing.
+- **Transpose aliased rest objects** — `transpose_steps` now copies rest
+  `Step` objects instead of returning aliased references.
+- **Serialize writes over-length sequences** — `serialize()` now slices
+  to `MAX_STEPS`.
+- **Unclosed SysEx advances past track end** — terminator skip is guarded
+  with a bounds check.
+- **Phase reset per step causes audio clicks** — oscillator phase is now
+  tracked cumulatively across steps in both `render_steps_to_data` and
+  `render_steps_wav`.
+- **Bank length spinner had no effect** — `bank_length` is now wired into
+  grid display and playback truncation.
+- **Paste operations crash on invalid clipboard data** — `ValueError` from
+  malformed tokens is now caught with a user-friendly message.
+- **Add-step could insert at stale cursor** — now uses selection position
+  when selection is active.
+- **Copy bank allowed self-copy and invalid targets** — validated bank
+  range and rejected self-copy.
+- **Ctrl+scroll detection incomplete on Linux** — added `0x20000` mask for
+  extended Ctrl key modifier.
+- **Step number labels too sparse at small sizes** — visibility threshold
+  adjusted for both orientations.
+- **Keyboard highlight captured `rect` by reference** — replaced lambda
+  default-arg hack with a proper closure.
+- **Piano roll note outline was empty string** — `outline` parameter is
+  now omitted when not needed instead of passing `""` (which Tk
+  interprets as a black border).
+- **`make_wave` envelope could never reach full amplitude** — attack and
+  release durations are clamped to half the total frame count.
+- **Out-of-range MIDI notes corrupt exported file** — `export_midi` now
+  clamps notes to 0..127.
+- **Thread-unsafe `_last_error` access** — wrapped all reads and writes in
+  a threading lock.
+- **MIDI import skipped non-MTrk chunks** — now scans past unknown chunk
+  types instead of breaking.
+- **Context menu lambdas captured `idx` by reference** — all context menu
+  commands now use default-argument lambdas.
 
 ## [0.12.1] - 2026-06-07
 

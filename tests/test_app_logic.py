@@ -43,3 +43,16 @@ def test_build_arpeggio_modes_remove_duplicates_and_order_notes():
 
 def test_build_arpeggio_up_down_handles_single_note():
     assert MbseqStudio._build_arpeggio([60], "Up-Down") == [60]
+
+
+def test_parse_step_tokens_accepts_rests_and_midi_range():
+    assert MbseqStudio._parse_step_tokens(["60", "x", "127"]) == [60, None, 127]
+
+
+def test_parse_step_tokens_rejects_bad_or_out_of_range_tokens():
+    for tokens in (["bad"], ["128"], ["-1"]):
+        try:
+            MbseqStudio._parse_step_tokens(tokens)
+        except ValueError:
+            continue
+        raise AssertionError(f"expected ValueError for {tokens!r}")
