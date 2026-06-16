@@ -280,15 +280,23 @@ class MbseqStudio(tk.Tk):
         ToolTip(b, "Paste from clipboard (Ctrl+V). Shift+V for bank.")
 
         ttk.Label(edit, text="Transpose").pack(side="left", padx=(14, 3))
-        for v in [-12, -1, 1, 12]:
+        transpose_options = [
+            ("-2 oct", -24, "Transpose by -2 octaves"),
+            ("-1 oct", -12, "Transpose by -1 octave"),
+            ("-1", -1, "Transpose by -1 semitone"),
+            ("+1", 1, "Transpose by +1 semitone"),
+            ("+1 oct", 12, "Transpose by +1 octave"),
+            ("+2 oct", 24, "Transpose by +2 octaves"),
+        ]
+        for label, v, tip in transpose_options:
             b = ttk.Button(
                 edit,
-                text=f"{v:+d}",
-                width=4,
+                text=label,
+                width=6,
                 command=lambda x=v: self.transpose_bank(x),  # type: ignore[misc]
             )
             b.pack(side="left")
-            ToolTip(b, f"Transpose by {v} semitones")
+            ToolTip(b, tip)
 
         self.paned = ttk.PanedWindow(self, orient="vertical")
         self.paned.pack(fill="both", expand=True, padx=8, pady=4)
@@ -409,6 +417,8 @@ class MbseqStudio(tk.Tk):
             accelerator="Ctrl+Shift+V",
             command=self.paste_bank,
         )
+        em.add_separator()
+        em.add_command(label="Duplicate Bank...", command=self.duplicate_bank_dialog)
         em.add_separator()
         em.add_command(label="Clear Selection", command=self.clear_selection)
         m.add_cascade(label="Edit", menu=em)
@@ -912,6 +922,19 @@ class MbseqStudio(tk.Tk):
         self.clipboard_clear()
         self.clipboard_append(" ".join(tokens))
 
+    @staticmethod
+    def _parse_step_tokens(tokens: list[str], limit: int = MAX_STEPS) -> list[int | None]:
+        parsed: list[int | None] = []
+        for token in tokens[: max(0, limit)]:
+            if token.lower() == "x":
+                parsed.append(None)
+                continue
+            note = int(token)
+            if not 0 <= note <= 127:
+                raise ValueError("MIDI note out of range")
+            parsed.append(note)
+        return parsed
+
     def paste_selection(self) -> None:
         try:
             text = self.clipboard_get().strip()
@@ -920,18 +943,21 @@ class MbseqStudio(tk.Tk):
         tokens = text.split()
         if not tokens:
             return
+        paste_limit = max(0, MAX_STEPS - self.cursor.get())
+        if paste_limit == 0:
+            return
+        try:
+            parsed = self._parse_step_tokens(tokens, paste_limit)
+        except ValueError:
+            messagebox.showinfo("Paste Selection", "Clipboard contains invalid data.")
+            return
         self.push_undo()
         steps = self.steps()
         start = self.cursor.get()
-        for i, t in enumerate(tokens):
+        for i, v in enumerate(parsed):
             idx = start + i
             if idx >= MAX_STEPS:
                 break
-            try:
-                v = None if t.lower() == "x" else int(t)
-            except ValueError:
-                messagebox.showinfo("Paste Selection", "Clipboard contains invalid data.")
-                return
             if idx >= len(steps):
                 steps.append(Step(note=v))
             else:
@@ -955,9 +981,7 @@ class MbseqStudio(tk.Tk):
         if not tokens:
             return
         try:
-            new = [Step(note=(None if t.lower() == "x" else int(t))) for t in tokens][
-                :MAX_STEPS
-            ]
+            new = [Step(note=note) for note in self._parse_step_tokens(tokens)]
         except ValueError:
             messagebox.showinfo("Paste Bank", "Clipboard contains invalid data.")
             return
@@ -1767,8 +1791,9 @@ class MbseqStudio(tk.Tk):
 
     def apply_raw(self) -> None:
         try:
+            project = MbseqProject.parse(self.raw.get("1.0", "end"))
             self.push_undo()
-            self.project = MbseqProject.parse(self.raw.get("1.0", "end"))
+            self.project = project
             self.slot.set(1)
             self.bank_name_var.set(
                 self.project.bank_names.get(
@@ -1780,6 +1805,9 @@ class MbseqStudio(tk.Tk):
             self.refresh_all()
         except Exception as e:
             messagebox.showerror("Error", str(e))
+
+    def _step_divisor(self) -> int:
+        return 4 if self.step_res.get() == "1/16" else 2
 
     def toggle_play(self) -> None:
         self.stop_sequence() if self.playing else self.play_sequence()
@@ -1813,6 +1841,7 @@ class MbseqStudio(tk.Tk):
             sustain=self.sustain.get(),
             release=self.release.get(),
             metronome=self.metronome.get(),
+            steps_per_quarter=self._step_divisor(),
         )
         self._pre_render_file = (
             Path(tempfile.gettempdir()) / f"mbseq_{uuid.uuid4().hex}.wav"
@@ -1841,8 +1870,7 @@ class MbseqStudio(tk.Tk):
         if not self.playing:
             return
         steps = self.steps()[:self.bank_length.get()]
-        div = 4 if self.step_res.get() == "1/16" else 2
-        ms = int(60000 / max(1, self.tempo.get()) / div)
+        ms = int(60000 / max(1, self.tempo.get()) / self._step_divisor())
         if not steps or self._play_idx >= len(steps):
             self._advance_bank()
             return
