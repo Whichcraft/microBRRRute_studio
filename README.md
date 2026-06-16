@@ -93,6 +93,7 @@ Every version bump merged to `main` is built and published automatically by CI.
   expressive rendering included).
 - **Unsaved-changes guard.** Title bar shows `*` and app warns before quitting.
 - **Tooltips.** Hover over any button for help.
+- **Auto-update Mechanism.** Automatically check for updates on startup, with a configuration toggle in the settings menu. Downloads and replaces the executable directly for standalone builds, or links to the release page when running from source.
 
 ---
 
